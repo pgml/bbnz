@@ -42,11 +42,7 @@ pub fn init(alloc: std.mem.Allocator) !*Editor {
 
 pub fn update(self: *Editor, event: App.Event) !void {
     if (self.textarea.nbrBufs() == 0) {
-
-        //try self.textarea.newBuffer("/home/rico/.bellbird-notes-dev/A Raving Beauty.note");
-        //try self.textarea.newBuffer("/home/pgml/.bellbird-notes-dev/A Raving Beauty.note");
-        try self.textarea.openBuf("/home/pgml/.bellbird-notes-dev/Changelog.txt");
-        //try self.textarea.newScratchBuffer("");
+        return;
     }
 
     try self.textarea.enableVimMode();

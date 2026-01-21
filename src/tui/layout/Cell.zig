@@ -60,6 +60,18 @@ pub fn blur(self: *Cell) void {
     self.is_focused = false;
 }
 
+pub fn setFocus(self: *Cell, f: bool) void {
+    if (self.is_focused == f) {
+        return;
+    }
+
+    if (f) {
+        self.focus();
+    } else {
+        self.blur();
+    }
+}
+
 pub fn getChild(self: Cell) vx.Window.ChildOptions {
     var win: vx.Window.ChildOptions = .{
         .x_off = self.offset_x,

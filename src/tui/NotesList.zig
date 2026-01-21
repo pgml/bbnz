@@ -11,6 +11,8 @@ const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
 
 alloc: std.mem.Allocator,
 
+app: *App,
+
 /// The layout cell/column
 cell: *Cell,
 
@@ -62,11 +64,12 @@ const NoteItem = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator) !*NotesList {
+pub fn init(alloc: std.mem.Allocator, app: *App) !*NotesList {
     const self = try alloc.create(NotesList);
 
     self.* = .{
         .alloc = alloc,
+        .app = app,
         .cell = try .init(alloc),
         .scroll_view = .{},
     };
@@ -79,20 +82,30 @@ pub fn init(alloc: std.mem.Allocator) !*NotesList {
 pub fn update(self: *NotesList, event: App.Event) !void {
     switch (event) {
         .key_press => |key| {
+            if (!self.cell.isFocused()) {
+                return;
+            }
+
+            // this is all temporary
             switch (key.codepoint) {
                 'j' => self.selected_index += 1,
                 'k' => self.selected_index -= 1,
+                vx.Key.enter => {
+                    if (self.selectedNote()) |note| {
+                        try self.app.editor.openBuf(note.data.path);
+                    }
+                },
                 else => {},
             }
         },
         else => {},
     }
 
-    self.selected_index = std.math.clamp(
-        self.selected_index,
-        0,
-        self.note_items.items.len - 1,
-    );
+    var list_len = self.note_items.items.len;
+    if (list_len > 0) {
+        list_len -= 1;
+    }
+    self.selected_index = std.math.clamp(self.selected_index, 0, list_len);
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
@@ -191,6 +204,32 @@ fn createNoteItem(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
     };
 
     return note_item;
+}
+
+fn getListItem(self: NotesList, index: usize) ?*NoteItem {
+    if (index >= self.note_items.items.len) {
+        return null;
+    }
+    return self.note_items.items[index];
+}
+
+fn selectedNote(self: NotesList) ?*NoteItem {
+    if (self.getListItem(@intCast(self.selected_index))) |note| {
+        return note;
+    }
+    return null;
+}
+
+pub fn focus(self: *NotesList) void {
+    self.cell.focus();
+}
+
+pub fn blur(self: *NotesList) void {
+    self.cell.blur();
+}
+
+pub fn setFocus(self: *NotesList, f: bool) void {
+    self.cell.setFocus(f);
 }
 
 fn freeNotes(self: *NotesList) void {

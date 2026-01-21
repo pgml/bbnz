@@ -19,6 +19,8 @@ buffer: usize,
 
 win: ?vx.Window = null,
 
+is_focucsed: bool = false,
+
 scroll_view: ?*vx.widgets.ScrollView = null,
 
 /// The textarea's width
@@ -130,7 +132,7 @@ pub fn draw(self: *TextArea) void {
 
         // Do cursor stuff only on current row
         if (buf.row == row_index or self.getTermRow() == row_index) {
-            if (self.use_virtual_cursor) {
+            if (self.use_virtual_cursor or !self.is_focucsed) {
                 win.hideCursor();
             } else {
                 win.showCursor(

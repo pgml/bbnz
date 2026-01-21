@@ -91,7 +91,6 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !*DirectoryTree {
     };
 
     self.cell.setWidth(self.default_width);
-    self.cell.focus();
 
     return self;
 }
@@ -106,11 +105,20 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
             if (!self.cell.isFocused()) {
                 return;
             }
+            if (key.matches('j', .{})) {
+                self.selected_index += 1;
+            }
+            if (key.matches('k', .{})) {
+                self.selected_index -= 1;
+            }
+            if (key.matches('h', .{ .ctrl = false })) {
+                try self.collapseTreeItem(@intCast(self.selected_index));
+            }
+            if (key.matches('l', .{ .ctrl = false })) {
+                try self.expandDirItem(@intCast(self.selected_index));
+            }
+
             switch (key.codepoint) {
-                'j' => self.selected_index += 1,
-                'k' => self.selected_index -= 1,
-                'l' => try self.expandDirItem(@intCast(self.selected_index)),
-                'h' => try self.collapseTreeItem(@intCast(self.selected_index)),
                 vx.Key.enter => {
                     const selected_dir = self.selectedDir();
                     try self.app.notes_list.getNotes(selected_dir.data.path);
@@ -307,6 +315,18 @@ fn getTreeItem(self: DirectoryTree, index: usize) *TreeItem {
 
 fn selectedDir(self: DirectoryTree) *TreeItem {
     return self.getTreeItem(@intCast(self.selected_index));
+}
+
+pub fn focus(self: *DirectoryTree) void {
+    self.cell.focus();
+}
+
+pub fn blur(self: *DirectoryTree) void {
+    self.cell.blur();
+}
+
+pub fn setFocus(self: *DirectoryTree, f: bool) void {
+    self.cell.setFocus(f);
 }
 
 pub fn deinit(self: *DirectoryTree) void {

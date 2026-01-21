@@ -34,12 +34,15 @@ pub fn init(alloc: std.mem.Allocator) !*Editor {
     };
 
     self.cell.setWidth(self.default_width);
-    //self.cell.focus();
 
     return self;
 }
 
 pub fn update(self: *Editor, event: App.Event) !void {
+    if (!self.cell.isFocused()) {
+        return;
+    }
+
     if (self.textarea.numBufs() == 0) {
         return;
     }
@@ -65,6 +68,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
     //child_win.height -= top_padding;
 
     self.textarea.win = child_win;
+    self.textarea.is_focucsed = self.cell.isFocused();
 
     if (self.textarea.numBufs() > 0) {
         self.scroll_view.draw(child_win, .{
@@ -90,6 +94,23 @@ pub fn draw(self: *Editor, win: vx.Window) void {
 
         self.textarea.draw();
     }
+}
+
+pub fn openBuf(self: *Editor, path: []const u8) !void {
+    try self.textarea.openBuf(path);
+    self.textarea.repositionView();
+}
+
+pub fn focus(self: *Editor) void {
+    self.cell.focus();
+}
+
+pub fn blur(self: *Editor) void {
+    self.cell.blur();
+}
+
+pub fn setFocus(self: *Editor, f: bool) void {
+    self.cell.setFocus(f);
 }
 
 pub fn deinit(self: *Editor) void {

@@ -90,7 +90,3 @@ fn borderOpts(self: Cell) vx.Window.BorderOptions {
         .style = .{ .fg = color },
     };
 }
-
-pub fn deinit(self: *Cell) void {
-    self.alloc.destroy(self);
-}

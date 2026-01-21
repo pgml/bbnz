@@ -52,5 +52,5 @@ pub fn draw(self: *StatusBar, win: vx.Window) void {
 }
 
 pub fn deinit(self: *StatusBar) void {
-    self.cell.deinit();
+    self.alloc.destroy(self.cell);
 }

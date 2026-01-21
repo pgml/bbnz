@@ -92,6 +92,6 @@ pub fn draw(self: *Editor, win: vx.Window) void {
 }
 
 pub fn deinit(self: *Editor) void {
-    self.cell.deinit();
+    self.alloc.destroy(self.cell);
     self.textarea.deinit();
 }

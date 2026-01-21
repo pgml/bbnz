@@ -304,5 +304,5 @@ pub fn deinit(self: *DirectoryTree) void {
     }
 
     self.tree_items.deinit(self.alloc);
-    self.cell.deinit();
+    self.alloc.destroy(self.cell);
 }

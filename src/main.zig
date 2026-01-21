@@ -8,6 +8,11 @@ pub const std_options: std.Options = .{
     .logFn = log.toFile,
 };
 
+pub const KnownFolderConfig = struct {
+    xdg_force_default: bool = false,
+    xdg_on_mac: bool = false,
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {

@@ -4,6 +4,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const vaxis = b.dependency("vaxis", .{ .target = target, .optimize = optimize });
+    const dmp = b.dependency("diffmatchpatch", .{});
+    //const zig_time_dep = b.dependency("zig-time", .{});
+    const known_folders = b.dependency("known-folders", .{}).module("known-folders");
+
     const exe = b.addExecutable(.{
         .name = "bbnotes",
         .root_module = b.createModule(.{
@@ -14,18 +19,10 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    const vaxis = b.dependency("vaxis", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     exe.root_module.addImport("vaxis", vaxis.module("vaxis"));
-
-    //const zig_time_dep = b.dependency("zig-time", .{});
     //exe.root_module.addImport("zig-time", zig_time_dep.module("zig-time"));
-
-    const dmp = b.dependency("diffmatchpatch", .{});
     exe.root_module.addImport("diffmatchpatch", dmp.module("diffmatchpatch"));
+    exe.root_module.addImport("known-folders", known_folders);
 
     b.installArtifact(exe);
 

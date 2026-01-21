@@ -8,9 +8,12 @@ const Cell = @import("layout/Cell.zig");
 const Config = @import("../Config.zig");
 const fs = @import("../fs.zig");
 const ListItem = @import("ListItem.zig");
+const NotesList = @import("NotesList.zig");
 const utils = @import("../utils.zig");
 
 alloc: std.mem.Allocator,
+
+app: *App,
 
 /// The layout cell/column
 cell: *Cell,
@@ -40,7 +43,7 @@ const TreeItem = struct {
     /// General list data
     data: ListItem,
 
-    dir_entry: fs.DirEntry = .{},
+    dir_entry: fs.Directories.Entry = .{},
 
     cell: *Cell,
 
@@ -73,15 +76,16 @@ const TreeItem = struct {
         alloc.free(self.data.name);
         alloc.free(self.data.path);
         self.children.deinit(alloc);
-        self.cell.deinit();
+        alloc.destroy(self.cell);
     }
 };
 
-pub fn init(alloc: std.mem.Allocator) !*DirectoryTree {
+pub fn init(alloc: std.mem.Allocator, app: *App) !*DirectoryTree {
     const self = try alloc.create(DirectoryTree);
 
     self.* = .{
         .alloc = alloc,
+        .app = app,
         .cell = try .init(alloc),
         .scroll_view = .{},
     };
@@ -99,25 +103,32 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
 
     switch (event) {
         .key_press => |key| {
+            if (!self.cell.isFocused()) {
+                return;
+            }
             switch (key.codepoint) {
                 'j' => self.selected_index += 1,
                 'k' => self.selected_index -= 1,
                 'l' => try self.expandDirItem(@intCast(self.selected_index)),
                 'h' => try self.collapseTreeItem(@intCast(self.selected_index)),
+                vx.Key.enter => {
+                    const selected_dir = self.selectedDir();
+                    try self.app.notes_list.getNotes(selected_dir.data.path);
+                },
                 else => {},
             }
         },
         else => {},
     }
 
-    self.selected_index = std.math.clamp(
-        self.selected_index,
-        0,
-        self.tree_items.items.len - 1,
-    );
+    var tree_len = self.tree_items.items.len;
+    if (tree_len > 0) {
+        tree_len -= 1;
+    }
+    self.selected_index = std.math.clamp(self.selected_index, 0, tree_len);
 }
 
-pub fn draw(self: *DirectoryTree, win: vx.Window) !void {
+pub fn draw(self: *DirectoryTree, win: vx.Window) void {
     const opts = self.cell.getChild();
     const child_win = win.child(opts);
 
@@ -172,12 +183,10 @@ fn writeLine(win: vx.Window, item: *TreeItem, row: u16, width: u16, style: vx.Ce
         });
 
         text_width += w;
-
         col += 1;
     }
 
-    const pad_right: u16 = @intCast(width - text_width - pad_left);
-    for (0..pad_right) |_| {
+    while (col < width) {
         win.writeCell(col, row, .{
             .char = .{ .grapheme = " ", .width = 1 },
             .style = style,
@@ -191,7 +200,7 @@ fn buildTreeItems(self: *DirectoryTree) !void {
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
     const notes_root = try Config.getNotesRootDir();
-    const tmp_dir_entries = try fs.readDir(arena.allocator(), notes_root);
+    const tmp_dir_entries = try fs.Directories.list(arena.allocator(), notes_root);
 
     for (tmp_dir_entries) |entry| {
         const dir_item = try self.createDirItem(entry, 0, 0);
@@ -216,7 +225,10 @@ fn expandDirItem(self: *DirectoryTree, index: usize) !void {
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
     // @todo: dont read the directory everytime we expand
-    const tmp_dir_entry = try fs.readDir(arena.allocator(), tree_item.data.path);
+    const tmp_dir_entry = try fs.Directories.list(
+        arena.allocator(),
+        tree_item.data.path,
+    );
 
     var i: usize = 0;
     for (tmp_dir_entry) |entry| {
@@ -264,7 +276,7 @@ fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
 
 fn createDirItem(
     self: *DirectoryTree,
-    item: fs.DirEntry,
+    item: fs.Directories.Entry,
     parent_index: usize,
     level: u16,
 ) !*TreeItem {
@@ -294,7 +306,7 @@ fn getTreeItem(self: DirectoryTree, index: usize) *TreeItem {
 }
 
 fn selectedDir(self: DirectoryTree) *TreeItem {
-    return self.getTreeItem(self.selected_index);
+    return self.getTreeItem(@intCast(self.selected_index));
 }
 
 pub fn deinit(self: *DirectoryTree) void {

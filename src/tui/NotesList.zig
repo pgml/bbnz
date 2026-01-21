@@ -5,14 +5,62 @@ const vx = @import("vaxis");
 
 const App = @import("../App.zig");
 const Cell = @import("layout/Cell.zig");
+const fs = @import("../fs.zig");
+const ListItem = @import("ListItem.zig");
+const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
 
 alloc: std.mem.Allocator,
 
+/// The layout cell/column
 cell: *Cell,
 
+/// default width of the directory tree column.
 default_width: u16 = 30,
 
+/// default heigh of the directory tree column.
 default_height: u16 = 0,
+
+/// default height of a single directory item
+default_item_height: u16 = 1,
+
+/// The list index of the selected tree item/directory.
+selected_index: isize = 0,
+
+/// A flat list of all visible directories.
+note_items: std.ArrayList(*NoteItem) = .empty,
+
+/// The directory path of the currently displayed notes.
+/// This path might not match the directory that is selected in the
+/// directory tree since we don't automatically display a directory's
+/// content on a selection change
+current_path: []const u8 = "",
+
+/// Contains dirty buffers of the current notes list
+DirtyBuffers: std.ArrayList(Buffer) = .empty,
+
+/// Buffers holds all the open buffers
+Buffers: std.ArrayList(*Buffer) = .empty,
+
+scroll_view: vx.widgets.ScrollView,
+
+const NoteItem = struct {
+    /// General list data
+    data: ListItem,
+
+    cell: *Cell,
+
+    /// Stores the rendered toggle arrow icon
+    icon: []const u8 = "",
+
+    // Stores the rendered toggle arrow icon
+    toggle_arrow: []const u8 = "",
+
+    pub fn deinit(self: *NoteItem, alloc: std.mem.Allocator) void {
+        alloc.free(self.data.name);
+        alloc.free(self.data.path);
+        alloc.destroy(self.cell);
+    }
+};
 
 pub fn init(alloc: std.mem.Allocator) !*NotesList {
     const self = try alloc.create(NotesList);
@@ -20,6 +68,7 @@ pub fn init(alloc: std.mem.Allocator) !*NotesList {
     self.* = .{
         .alloc = alloc,
         .cell = try .init(alloc),
+        .scroll_view = .{},
     };
 
     self.cell.setWidth(self.default_width);
@@ -28,20 +77,131 @@ pub fn init(alloc: std.mem.Allocator) !*NotesList {
 }
 
 pub fn update(self: *NotesList, event: App.Event) !void {
-    _ = self;
-
     switch (event) {
         .key_press => |key| {
-            _ = key;
+            switch (key.codepoint) {
+                'j' => self.selected_index += 1,
+                'k' => self.selected_index -= 1,
+                else => {},
+            }
         },
         else => {},
     }
+
+    self.selected_index = std.math.clamp(
+        self.selected_index,
+        0,
+        self.note_items.items.len - 1,
+    );
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
-    _ = win.child(self.cell.getChild());
+    const opts = self.cell.getChild();
+    const child_win = win.child(opts);
+
+    var index: isize = 0;
+    for (self.note_items.items) |item| {
+        item.cell.setHeight(self.default_item_height);
+        var child_opts = item.cell.getChild();
+        // reset border for each tree item
+        child_opts.border = .{};
+
+        _ = child_win.child(child_opts);
+
+        var style: vx.Cell.Style = .{};
+        if (index == self.selected_index) {
+            style.bg = .{ .rgb = .{ 66, 75, 93 } };
+        }
+
+        const row: u16 = @intCast(index + item.cell.height - 1);
+        writeLine(child_win, item, row, self.cell.width, style);
+        index += 1;
+        item.data.index = @intCast(index);
+    }
 }
 
-pub fn deinit(self: NotesList) void {
-    self.cell.deinit();
+fn writeLine(win: vx.Window, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
+    var iter = vx.unicode.graphemeIterator(item.data.name);
+    var col: u16 = 0;
+    var text_width: u16 = 0;
+
+    win.writeCell(col, row, .{
+        .char = .{ .grapheme = " ", .width = 1 },
+        .style = style,
+    });
+    col += 1;
+
+    while (iter.next()) |grapheme| {
+        const g = grapheme.bytes(item.data.name);
+        const w: u8 = @intCast(win.gwidth(g));
+
+        win.writeCell(col, row, .{
+            .char = .{ .grapheme = g, .width = w },
+            .style = style,
+        });
+
+        text_width += w;
+
+        col += 1;
+    }
+
+    while (col < width) {
+        win.writeCell(col, row, .{
+            .char = .{ .grapheme = " ", .width = 1 },
+            .style = style,
+        });
+        col += 1;
+    }
+}
+
+pub fn getNotes(self: *NotesList, path: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(self.alloc);
+    defer arena.deinit();
+
+    self.alloc.free(self.current_path);
+    self.current_path = try self.alloc.dupe(u8, path);
+
+    const tmp_note_entries = try fs.Notes.list(
+        arena.allocator(),
+        self.current_path,
+    );
+
+    self.freeNotes();
+    self.note_items = .empty;
+
+    for (tmp_note_entries) |entry| {
+        const note_item = try self.createNoteItem(entry);
+        try self.note_items.append(self.alloc, note_item);
+    }
+}
+
+fn createNoteItem(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
+    const note_item = try self.alloc.create(NoteItem);
+
+    const cell: *Cell = try .init(self.alloc);
+    cell.setHeight(self.default_item_height);
+
+    note_item.* = .{
+        .data = .{
+            .index = 0,
+            .name = try self.alloc.dupe(u8, item.name),
+            .path = try self.alloc.dupe(u8, item.path),
+        },
+        .cell = cell,
+    };
+
+    return note_item;
+}
+
+fn freeNotes(self: *NotesList) void {
+    for (self.note_items.items) |notes| {
+        notes.deinit(self.alloc);
+        self.alloc.destroy(notes);
+    }
+    self.note_items.deinit(self.alloc);
+}
+
+pub fn deinit(self: *NotesList) void {
+    self.freeNotes();
+    self.alloc.free(self.current_path);
 }

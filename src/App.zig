@@ -63,12 +63,11 @@ pub fn run(self: *App) !void {
     try self.vx.enterAltScreen(writer);
 
     self.notes_list = try .init(self.alloc);
-    self.directory_tree = try .init(self.alloc);
+    self.directory_tree = try .init(self.alloc, self);
     self.editor = try .init(self.alloc);
     self.status_bar = try .init(self.alloc);
 
     try writer.flush();
-
     try self.vx.queryTerminal(self.tty.writer(), 1 * std.time.ns_per_s);
 
     while (!self.should_quit) {
@@ -96,7 +95,6 @@ pub fn run(self: *App) !void {
 }
 
 pub fn update(self: *App, event: Event) !void {
-    try self.notes_list.update(event);
     try self.directory_tree.update(event);
     try self.editor.update(event);
     try self.status_bar.update(event);
@@ -125,7 +123,7 @@ fn initComponents(self: *App, win: vaxis.Window) !void {
 
     self.directory_tree.cell.setHeight(win.height - sb_height);
     self.directory_tree.cell.setOffsetY(0);
-    try self.directory_tree.draw(win);
+    self.directory_tree.draw(win);
 
     self.notes_list.cell.setHeight(win.height - sb_height);
     self.notes_list.cell.setOffsetY(0);
@@ -145,11 +143,12 @@ fn initComponents(self: *App, win: vaxis.Window) !void {
 pub fn deinit(self: *App) void {
     Config.deinit();
 
-    self.notes_list.deinit();
-    self.alloc.destroy(self.notes_list);
-
     self.directory_tree.deinit();
     self.alloc.destroy(self.directory_tree);
+
+    self.notes_list.deinit();
+    self.alloc.destroy(self.notes_list.cell);
+    self.alloc.destroy(self.notes_list);
 
     self.editor.deinit();
     self.alloc.destroy(self.editor);

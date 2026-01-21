@@ -7,6 +7,7 @@ const App = @import("../App.zig");
 const Cell = @import("layout/Cell.zig");
 const log = @import("../log.zig");
 const TextArea = @import("widgets/TextArea/TextArea.zig");
+pub const Buffer = TextArea.Buffer;
 
 const theme = @import("layout/theme.zig");
 

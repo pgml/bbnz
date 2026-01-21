@@ -360,14 +360,20 @@ pub fn setContentFromStr(self: *Buffer, content: []const u8) !void {
 
 pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
     const file = try std.fs.openFileAbsolute(file_path, .{ .mode = .read_write });
+    defer file.close();
     const stat = try file.stat();
     const size = stat.size;
-    defer file.close();
+
+    // Empty file - nothing to read.
+    if (stat.size == 0) {
+        try self.curRow().appendChar(.{ .grapheme = "", .width = 1 });
+        return;
+    }
 
     self.read_buf = try self.arena_alloc.alloc(u8, size);
     var reader = file.reader(self.read_buf);
-
     var i: usize = 0;
+
     while (try reader.interface.takeDelimiter('\n')) |line| {
         defer i += 1;
 
@@ -376,7 +382,6 @@ pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
         }
 
         var iter = vx.unicode.graphemeIterator(line);
-
         while (iter.next()) |g| {
             try self.curRow().appendChar(.{
                 .grapheme = g.bytes(line),

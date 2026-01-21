@@ -148,11 +148,11 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     // use the arena from the buffer since the history is tied to it.
     buf.history = try .init(buf.arena_alloc);
     buf.setPath(path);
-    buf.setIndex(self.nbrBufs() - 1);
+    buf.setIndex(self.numBufs() - 1);
 
     try buf.setContentFromFile(path);
 
-    self.buffer = self.nbrBufs() + 1;
+    self.buffer = self.numBufs() + 1;
     self.goToTop();
 }
 
@@ -162,7 +162,7 @@ pub fn newScratchBuf(self: *TextArea, content: ?[]const u8) !void {
     const value = if (content != null) content.? else "";
     try buf.curRow().insertSliceAtCursor(value);
 
-    self.buffer = self.nbrBufs() + 1;
+    self.buffer = self.numBufs() + 1;
 }
 
 /// Opens a buffer with the given `path`.
@@ -186,15 +186,15 @@ pub fn findBuf(self: TextArea, path: []const u8) ?*Buffer {
     return null;
 }
 
-pub fn nbrBufs(self: *TextArea) usize {
+pub fn numBufs(self: *TextArea) usize {
     return self.buffers.items.len;
 }
 
 /// Returns the current buffer.
 pub fn curBuf(self: *TextArea) *Buffer {
     var buf_index = self.buffer;
-    if (buf_index > self.nbrBufs()) {
-        buf_index = self.nbrBufs() - 1;
+    if (buf_index > self.numBufs()) {
+        buf_index = self.numBufs() - 1;
     }
     return self.buffers.items[buf_index];
 }
@@ -386,7 +386,7 @@ pub fn deleteLineAt(self: *TextArea, index: i32) void {
     }
 
     // delete at first and only line, just empty that line.
-    if (buf.row == 0 and buf.nbrRows() == 1) {
+    if (buf.row == 0 and buf.numRows() == 1) {
         buf.curRow().shrinkAndFree();
         self.beginLine(false);
     } else {
@@ -397,7 +397,7 @@ pub fn deleteLineAt(self: *TextArea, index: i32) void {
     }
 
     // if we're deleting the last row, move to the last available line.
-    if (buf.row >= buf.nbrRows()) {
+    if (buf.row >= buf.numRows()) {
         buf.row = @intCast(buf.rows.items.len - 1);
     }
 
@@ -480,11 +480,11 @@ pub fn cursorUp(self: *TextArea) void {
 pub fn cursorDown(self: *TextArea) void {
     var buf: *Buffer = self.curBuf();
 
-    if (buf.row + 1 < buf.nbrRows()) {
+    if (buf.row + 1 < buf.numRows()) {
         buf.row += 1;
     }
 
-    if (buf.row + 1 < buf.nbrRows()) {
+    if (buf.row + 1 < buf.numRows()) {
         const next_row = buf.rows.items[@intCast(buf.row + 1)];
         // save last column position
         if ((next_row.len() == 0 and
@@ -654,7 +654,7 @@ pub fn wordLeftEnd(self: *TextArea) void {
 fn tryNextLine(self: *TextArea) bool {
     const buf: *Buffer = self.curBuf();
     const row_len: isize = @intCast(buf.curRow().len());
-    const num_rows: i32 = @intCast(buf.nbrRows());
+    const num_rows: i32 = @intCast(buf.numRows());
 
     if (buf.col >= row_len - 1 and buf.row < num_rows - 1) {
         self.cursorDown();
@@ -670,7 +670,7 @@ pub fn halfPageUp(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     const half_height: i16 = @intCast(self.height / 2);
     const row: i32 = @intCast(buf.row);
-    const new_row = std.math.clamp(row - half_height, 0, buf.nbrRows() - 1);
+    const new_row = std.math.clamp(row - half_height, 0, buf.numRows() - 1);
 
     if (self.scroll_view) |view| {
         const min: i32 = @intCast(view.scroll.y);
@@ -696,7 +696,7 @@ pub fn halfPageUp(self: *TextArea) void {
 pub fn halfPageDown(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     const half_height: u16 = self.height / 2;
-    const new_row = std.math.clamp(buf.row + half_height, 0, buf.nbrRows() - 1);
+    const new_row = std.math.clamp(buf.row + half_height, 0, buf.numRows() - 1);
 
     if (self.scroll_view) |view| {
         const min = view.scroll.y;
@@ -706,7 +706,7 @@ pub fn halfPageDown(self: *TextArea) void {
             view.scroll.y += half_height;
         }
 
-        if (max == buf.nbrRows() - 1) {
+        if (max == buf.numRows() - 1) {
             self.goToBottom();
         } else {
             self.moveCursorTo(@intCast(new_row), buf.col);
@@ -722,14 +722,14 @@ pub fn goToTop(self: *TextArea) void {
 
 /// Moves the cursor to the bottom of the text and repositions the view.
 pub fn goToBottom(self: *TextArea) void {
-    const nbr_rows: i32 = @intCast(self.curBuf().nbrRows());
+    const num_rows: i32 = @intCast(self.curBuf().numRows());
     var last_row: i32 = self.height;
 
-    if (nbr_rows < self.height) {
-        last_row = nbr_rows;
+    if (num_rows < self.height) {
+        last_row = num_rows;
     }
 
-    self.moveCursorTo(nbr_rows, self.curBuf().col);
+    self.moveCursorTo(num_rows, self.curBuf().col);
     self.repositionView();
 }
 
@@ -786,16 +786,16 @@ pub fn setCursorCol(self: *TextArea, col: i32) void {
 /// Moves the cursor to the given row.
 pub fn setCursorRow(self: *TextArea, row: i32) void {
     var buf: *Buffer = self.curBuf();
-    const nbr_rows = buf.nbrRows();
-    const clamped = std.math.clamp(row, 0, nbr_rows);
+    const num_rows = buf.numRows();
+    const clamped = std.math.clamp(row, 0, num_rows);
 
     // ensure the cursor does not go further as it should
-    var max_cur_row = buf.nbrRows() - 1;
-    if (buf.nbrRows() > self.height and self.height > 0) {
+    var max_cur_row = buf.numRows() - 1;
+    if (buf.numRows() > self.height and self.height > 0) {
         max_cur_row = self.height - 1;
     }
 
-    buf.row = @intCast(std.math.clamp(clamped, 0, nbr_rows - 1));
+    buf.row = @intCast(std.math.clamp(clamped, 0, num_rows - 1));
 }
 
 /// Creates a new history entry for the current Buffer

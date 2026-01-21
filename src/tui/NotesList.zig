@@ -4,11 +4,11 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const App = @import("../App.zig");
-const Column = @import("layout/Column.zig");
+const Cell = @import("layout/Cell.zig");
 
 alloc: std.mem.Allocator,
 
-col: *Column,
+cell: *Cell,
 
 default_width: u16 = 30,
 
@@ -19,10 +19,10 @@ pub fn init(alloc: std.mem.Allocator) !*NotesList {
 
     self.* = .{
         .alloc = alloc,
-        .col = try .init(alloc),
+        .cell = try .init(alloc),
     };
 
-    self.col.setWidth(self.default_width);
+    self.cell.setWidth(self.default_width);
 
     return self;
 }
@@ -39,9 +39,9 @@ pub fn update(self: *NotesList, event: App.Event) !void {
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
-    _ = win.child(self.col.getChild());
+    _ = win.child(self.cell.getChild());
 }
 
 pub fn deinit(self: NotesList) void {
-    self.col.deinit();
+    self.cell.deinit();
 }

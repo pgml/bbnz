@@ -117,28 +117,28 @@ pub fn update(self: *App, event: Event) !void {
 pub fn draw(self: *App) !void {
     var win: vaxis.Window = self.vx.window();
     win.clear();
-    self.initComponents(win);
+    try self.initComponents(win);
 }
 
-fn initComponents(self: *App, win: vaxis.Window) void {
-    const sb_height = self.status_bar.col.height;
+fn initComponents(self: *App, win: vaxis.Window) !void {
+    const sb_height = self.status_bar.cell.height;
 
-    self.notes_list.col.setHeight(win.height - sb_height);
-    self.notes_list.col.setOffsetY(0);
+    self.directory_tree.cell.setHeight(win.height - sb_height);
+    self.directory_tree.cell.setOffsetY(0);
+    try self.directory_tree.draw(win);
+
+    self.notes_list.cell.setHeight(win.height - sb_height);
+    self.notes_list.cell.setOffsetY(0);
+    self.notes_list.cell.setOffsetX(self.directory_tree.cell.width);
     self.notes_list.draw(win);
 
-    self.directory_tree.col.setHeight(win.height - sb_height);
-    self.directory_tree.col.setOffsetY(0);
-    self.directory_tree.col.setOffsetX(self.notes_list.col.width);
-    self.directory_tree.draw(win);
-
-    const editor_xoff = self.notes_list.col.width + self.directory_tree.col.width;
-    self.editor.col.setHeight(win.height - sb_height);
-    self.editor.col.setOffsetY(0);
-    self.editor.col.setOffsetX(editor_xoff);
+    const editor_xoff = self.notes_list.cell.width + self.directory_tree.cell.width;
+    self.editor.cell.setHeight(win.height - sb_height);
+    self.editor.cell.setOffsetY(0);
+    self.editor.cell.setOffsetX(editor_xoff);
     self.editor.draw(win);
 
-    self.status_bar.col.setOffsetY(self.editor.col.height);
+    self.status_bar.cell.setOffsetY(self.editor.cell.height);
     self.status_bar.draw(win);
 }
 

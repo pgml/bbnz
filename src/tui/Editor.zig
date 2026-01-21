@@ -2,11 +2,9 @@ const Editor = @This();
 
 const std = @import("std");
 const vx = @import("vaxis");
-const ScrollView = vx.widgets.ScrollView;
-const Window = vx.Window;
 
 const App = @import("../App.zig");
-const Column = @import("layout/Column.zig");
+const Cell = @import("layout/Cell.zig");
 const log = @import("../log.zig");
 const TextArea = @import("widgets/TextArea/TextArea.zig");
 
@@ -14,13 +12,13 @@ const theme = @import("layout/theme.zig");
 
 alloc: std.mem.Allocator,
 
-col: *Column,
+cell: *Cell,
 
 default_width: u16 = 0,
 
 default_height: u16 = 0,
 
-scroll_view: ScrollView,
+scroll_view: vx.widgets.ScrollView,
 
 textarea: TextArea,
 
@@ -29,19 +27,19 @@ pub fn init(alloc: std.mem.Allocator) !*Editor {
 
     self.* = .{
         .alloc = alloc,
-        .col = try .init(alloc),
+        .cell = try .init(alloc),
         .textarea = try .init(alloc),
         .scroll_view = .{},
     };
 
-    self.col.setWidth(self.default_width);
-    self.col.focus();
+    self.cell.setWidth(self.default_width);
+    //self.cell.focus();
 
     return self;
 }
 
 pub fn update(self: *Editor, event: App.Event) !void {
-    if (self.textarea.nbrBufs() == 0) {
+    if (self.textarea.numBufs() == 0) {
         return;
     }
 
@@ -56,7 +54,7 @@ pub fn update(self: *Editor, event: App.Event) !void {
 }
 
 pub fn draw(self: *Editor, win: vx.Window) void {
-    var child_win: vx.Window = win.child(self.col.getChild());
+    var child_win: vx.Window = win.child(self.cell.getChild());
     const gutter_width = 6;
     const top_padding = 0;
 
@@ -67,24 +65,24 @@ pub fn draw(self: *Editor, win: vx.Window) void {
 
     self.textarea.win = child_win;
 
-    if (self.textarea.nbrBufs() > 0) {
+    if (self.textarea.numBufs() > 0) {
         self.scroll_view.draw(child_win, .{
             .cols = self.textarea.width,
-            .rows = self.textarea.curBuf().nbrRows(),
+            .rows = self.textarea.curBuf().numRows(),
         });
 
         self.textarea.scroll_view = &self.scroll_view;
 
         const ln: vx.widgets.LineNumbers = .{
-            .num_lines = self.textarea.curBuf().nbrRows() +| 1,
+            .num_lines = self.textarea.curBuf().numRows() +| 1,
             .style = .{
                 .fg = theme.Color.LineNumber.fg,
             },
         };
 
         ln.draw(win.child(.{
-            .x_off = self.col.offset_x,
-            .y_off = self.col.offset_y + 1,
+            .x_off = self.cell.offset_x,
+            .y_off = self.cell.offset_y + 1,
             .width = gutter_width,
             .height = self.textarea.height,
         }), self.scroll_view.scroll.y);
@@ -94,6 +92,6 @@ pub fn draw(self: *Editor, win: vx.Window) void {
 }
 
 pub fn deinit(self: *Editor) void {
-    self.col.deinit();
+    self.cell.deinit();
     self.textarea.deinit();
 }

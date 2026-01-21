@@ -496,7 +496,7 @@ pub fn curRow(self: *Buffer) *Row {
     return self.rows.items[@intCast(self.row)];
 }
 
-pub fn nbrRows(self: Buffer) usize {
+pub fn numRows(self: Buffer) usize {
     return self.rows.items.len;
 }
 
@@ -510,7 +510,7 @@ pub fn updateCursorPos(self: *Buffer) void {
     self.cursor_pos.row_offset = self.row_offset;
 }
 pub fn shrinkAndFree(self: *Buffer) void {
-    self.rows.shrinkAndFree(self.arena_alloc, self.nbrRows());
+    self.rows.shrinkAndFree(self.arena_alloc, self.numRows());
 }
 
 pub fn deinit(self: *Buffer) void {

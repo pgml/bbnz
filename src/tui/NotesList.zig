@@ -4,10 +4,12 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const App = @import("../App.zig");
+const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
 const Cell = @import("layout/Cell.zig");
 const fs = @import("../fs.zig");
 const ListItem = @import("ListItem.zig");
-const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
+const theme = @import("layout/theme.zig");
+const Icon = theme.Icon;
 
 alloc: std.mem.Allocator,
 
@@ -45,6 +47,8 @@ Buffers: std.ArrayList(*Buffer) = .empty,
 
 scroll_view: vx.widgets.ScrollView,
 
+win: ?vx.Window = null,
+
 const NoteItem = struct {
     /// General list data
     data: ListItem,
@@ -64,7 +68,7 @@ const NoteItem = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator, app: *App) !*NotesList {
+pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList {
     const self = try alloc.create(NotesList);
 
     self.* = .{
@@ -75,6 +79,7 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !*NotesList {
     };
 
     self.cell.setWidth(self.default_width);
+    self.cell.title = title;
 
     return self;
 }
@@ -112,6 +117,10 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
     const opts = self.cell.getChild();
     const child_win = win.child(opts);
 
+    if (self.win == null) {
+        self.win = child_win;
+    }
+
     var index: isize = 0;
     for (self.note_items.items) |item| {
         item.cell.setHeight(self.default_item_height);
@@ -127,43 +136,34 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
         }
 
         const row: u16 = @intCast(index + item.cell.height - 1);
-        writeLine(child_win, item, row, self.cell.width, style);
+        self.writeLine(item, row, self.cell.width, style);
         index += 1;
         item.data.index = @intCast(index);
     }
 }
 
-fn writeLine(win: vx.Window, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
-    var iter = vx.unicode.graphemeIterator(item.data.name);
+pub fn drawHeader(self: NotesList, win: vx.Window, col: u16) void {
+    Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
+}
+
+fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
-    var text_width: u16 = 0;
 
-    win.writeCell(col, row, .{
-        .char = .{ .grapheme = " ", .width = 1 },
-        .style = style,
-    });
-    col += 1;
+    if (self.win) |win| {
+        Cell.write(win, &col, row, Cell.get(" ", 1, style));
+        Cell.write(win, &col, row, Cell.get(Icon.getNerd(.note), 1, style));
+        Cell.write(win, &col, row, Cell.get(" ", 1, style));
 
-    while (iter.next()) |grapheme| {
-        const g = grapheme.bytes(item.data.name);
-        const w: u8 = @intCast(win.gwidth(g));
+        var iter = vx.unicode.graphemeIterator(item.data.name);
+        while (iter.next()) |grapheme| {
+            const g = grapheme.bytes(item.data.name);
+            const w: u8 = @intCast(win.gwidth(g));
+            Cell.write(win, &col, row, Cell.get(g, w, style));
+        }
 
-        win.writeCell(col, row, .{
-            .char = .{ .grapheme = g, .width = w },
-            .style = style,
-        });
-
-        text_width += w;
-
-        col += 1;
-    }
-
-    while (col < width) {
-        win.writeCell(col, row, .{
-            .char = .{ .grapheme = " ", .width = 1 },
-            .style = style,
-        });
-        col += 1;
+        while (col < width) {
+            Cell.write(win, &col, row, Cell.get(" ", 1, style));
+        }
     }
 }
 

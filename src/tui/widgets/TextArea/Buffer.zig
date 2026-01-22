@@ -322,6 +322,10 @@ pub fn init(alloc: std.mem.Allocator) !*Buffer {
     return self;
 }
 
+pub fn getName(self: Buffer) []const u8 {
+    return std.fs.path.basename(self.path);
+}
+
 pub fn setIndex(self: *Buffer, index: usize) void {
     self.index = index;
 }

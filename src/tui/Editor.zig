@@ -5,6 +5,7 @@ const vx = @import("vaxis");
 
 const App = @import("../App.zig");
 const Cell = @import("layout/Cell.zig");
+const Config = @import("../Config.zig");
 const log = @import("../log.zig");
 const TextArea = @import("widgets/TextArea/TextArea.zig");
 pub const Buffer = TextArea.Buffer;
@@ -12,6 +13,8 @@ pub const Buffer = TextArea.Buffer;
 const theme = @import("layout/theme.zig");
 
 alloc: std.mem.Allocator,
+
+app: *App,
 
 cell: *Cell,
 
@@ -23,17 +26,19 @@ scroll_view: vx.widgets.ScrollView,
 
 textarea: TextArea,
 
-pub fn init(alloc: std.mem.Allocator) !*Editor {
+pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
     const self = try alloc.create(Editor);
 
     self.* = .{
         .alloc = alloc,
+        .app = app,
         .cell = try .init(alloc),
         .textarea = try .init(alloc),
         .scroll_view = .{},
     };
 
     self.cell.setWidth(self.default_width);
+    self.cell.title = title;
 
     return self;
 }
@@ -70,16 +75,17 @@ pub fn draw(self: *Editor, win: vx.Window) void {
     self.textarea.win = child_win;
     self.textarea.is_focucsed = self.cell.isFocused();
 
-    if (self.textarea.numBufs() > 0) {
+    if (self.textarea.hasBuffers()) {
+        const buf: *Buffer = self.textarea.curBuf();
         self.scroll_view.draw(child_win, .{
             .cols = self.textarea.width,
-            .rows = self.textarea.curBuf().numRows(),
+            .rows = buf.numRows(),
         });
 
         self.textarea.scroll_view = &self.scroll_view;
 
         const ln: vx.widgets.LineNumbers = .{
-            .num_lines = self.textarea.curBuf().numRows() +| 1,
+            .num_lines = buf.numRows() +| 1,
             .style = .{
                 .fg = theme.Color.LineNumber.fg,
             },
@@ -92,13 +98,76 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .height = self.textarea.height,
         }), self.scroll_view.scroll.y);
 
-        self.textarea.draw();
+        self.textarea.draw() catch return;
     }
+}
+
+pub fn drawHeader(self: Editor, win: vx.Window, col: u16) !void {
+    var arena = std.heap.ArenaAllocator.init(self.alloc);
+    defer arena.deinit();
+
+    if (self.textarea.hasBuffers()) {
+        const buf: *Buffer = self.textarea.curBuf();
+        if (!std.mem.eql(u8, buf.path, "")) {
+            const breadcrumb = try self.getBreadCrumb(arena.allocator());
+            if (!std.mem.eql(u8, breadcrumb, "")) {
+                self.cell.title = breadcrumb;
+            }
+        }
+    }
+
+    Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
 
 pub fn openBuf(self: *Editor, path: []const u8) !void {
     try self.textarea.openBuf(path);
     self.textarea.repositionView();
+}
+
+// Remove the root notes directory from the absolute buffer path,
+// Caller owns memory.
+pub fn getRelativeBufPath(self: Editor, alloc: std.mem.Allocator) ![]const u8 {
+    if (self.textarea.hasBuffers()) {
+        const buf: *Buffer = self.textarea.curBuf();
+        var rel_path: []u8 = try alloc.alloc(u8, buf.path.len);
+        const notes_root = try Config.getNotesRootDir();
+
+        if (std.fs.path.dirname(buf.path)) |dir_name| {
+            const len = dir_name.len - notes_root.len;
+            _ = std.mem.replace(u8, dir_name, notes_root, "", rel_path[0..]);
+            return rel_path[0..len];
+        }
+    }
+    return "";
+}
+
+fn getBreadCrumb(self: Editor, alloc: std.mem.Allocator) ![]const u8 {
+    if (!self.textarea.hasBuffers()) {
+        return "";
+    }
+
+    const buf: *Buffer = self.textarea.curBuf();
+    const rel_path = try self.getRelativeBufPath(alloc);
+    const separator = " › ";
+
+    if (std.mem.eql(u8, rel_path, "")) {
+        return "";
+    }
+
+    var out_buf: [256]u8 = undefined;
+    const replacements = std.mem.replace(u8, rel_path, "/", separator, out_buf[0..]);
+    const len = rel_path.len + (replacements * (separator.len - 1));
+
+    return try std.mem.concat(alloc, u8, &[_][]const u8{
+        " ",
+        theme.Icon.getNerd(.dir_closed),
+        out_buf[0..len],
+        separator,
+        theme.Icon.getNerd(.note),
+        " ",
+        buf.getName(),
+        " ",
+    });
 }
 
 pub fn focus(self: *Editor) void {

@@ -9,6 +9,8 @@ const Config = @import("../Config.zig");
 const fs = @import("../fs.zig");
 const ListItem = @import("ListItem.zig");
 const NotesList = @import("NotesList.zig");
+const theme = @import("layout/theme.zig");
+const Icon = theme.Icon;
 const utils = @import("../utils.zig");
 
 alloc: std.mem.Allocator,
@@ -38,6 +40,8 @@ tree_items: std.ArrayList(*TreeItem) = .empty,
 expanded_dirs: std.ArrayList([]const u8) = .empty,
 
 scroll_view: vx.widgets.ScrollView,
+
+win: ?vx.Window = null,
 
 const TreeItem = struct {
     /// General list data
@@ -80,7 +84,7 @@ const TreeItem = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator, app: *App) !*DirectoryTree {
+pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryTree {
     const self = try alloc.create(DirectoryTree);
 
     self.* = .{
@@ -91,6 +95,7 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !*DirectoryTree {
     };
 
     self.cell.setWidth(self.default_width);
+    self.cell.title = title;
 
     return self;
 }
@@ -102,6 +107,7 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
 
     switch (event) {
         .key_press => |key| {
+            // this is all temporary..
             if (!self.cell.isFocused()) {
                 return;
             }
@@ -140,6 +146,10 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
     const opts = self.cell.getChild();
     const child_win = win.child(opts);
 
+    if (self.win == null) {
+        self.win = child_win;
+    }
+
     var index: isize = 0;
     for (self.tree_items.items) |item| {
         item.cell.setHeight(self.default_item_height);
@@ -155,51 +165,51 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
         }
 
         const row: u16 = @intCast(index + item.cell.height - 1);
-        writeLine(child_win, item, row, self.cell.width, style);
+        self.writeLine(item, row, self.cell.width, style);
         index += 1;
         item.data.index = @intCast(index);
     }
 }
 
-fn writeLine(win: vx.Window, item: *TreeItem, row: u16, width: u16, style: vx.Cell.Style) void {
-    var iter = vx.unicode.graphemeIterator(item.data.name);
+pub fn drawHeader(self: DirectoryTree, win: vx.Window, col: u16) void {
+    Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
+}
+
+fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
-    var text_width: u16 = 0;
     const pad_left = 1;
 
-    win.writeCell(col, row, .{
-        .char = .{ .grapheme = " ", .width = 1 },
-        .style = style,
-    });
-    col += 1;
+    if (self.win) |win| {
+        var has_children: []const u8 = " ";
+        if (item.num_dirs > 0) {
+            has_children = Icon.getAlt(.dir_closed);
+        }
 
-    for (1..pad_left + item.level) |_| {
-        win.writeCell(col, row, .{
-            .char = .{ .grapheme = "  ", .width = 2 },
-            .style = style,
-        });
-        col += 2;
-    }
+        var dir_icon = Icon.getNerd(.dir_closed);
+        if (item.is_expanded) {
+            dir_icon = Icon.getNerd(.dir_open);
+            has_children = Icon.getAlt(.dir_open);
+        }
 
-    while (iter.next()) |grapheme| {
-        const g = grapheme.bytes(item.data.name);
-        const w: u8 = @intCast(win.gwidth(g));
+        for (1..pad_left + item.level) |_| {
+            Cell.write(win, &col, row, Cell.get("  ", 2, style));
+        }
 
-        win.writeCell(col, row, .{
-            .char = .{ .grapheme = g, .width = w },
-            .style = style,
-        });
+        Cell.write(win, &col, row, Cell.get(has_children, 1, style));
+        Cell.write(win, &col, row, Cell.get(" ", 1, style));
+        Cell.write(win, &col, row, Cell.get(dir_icon, 1, style));
+        Cell.write(win, &col, row, Cell.get(" ", 1, style));
 
-        text_width += w;
-        col += 1;
-    }
+        var iter = vx.unicode.graphemeIterator(item.data.name);
+        while (iter.next()) |grapheme| {
+            const g = grapheme.bytes(item.data.name);
+            const w: u8 = @intCast(win.gwidth(g));
+            Cell.write(win, &col, row, Cell.get(g, w, style));
+        }
 
-    while (col < width) {
-        win.writeCell(col, row, .{
-            .char = .{ .grapheme = " ", .width = 1 },
-            .style = style,
-        });
-        col += 1;
+        while (col < width) {
+            Cell.write(win, &col, row, Cell.get(" ", 1, style));
+        }
     }
 }
 
@@ -224,7 +234,7 @@ fn expandDirItem(self: *DirectoryTree, index: usize) !void {
     var tree_item: *TreeItem = self.getTreeItem(index);
     const level = tree_item.level;
 
-    if (tree_item.is_expanded) {
+    if (tree_item.is_expanded or tree_item.num_dirs == 0) {
         return;
     }
 

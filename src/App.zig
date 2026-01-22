@@ -64,9 +64,9 @@ pub fn run(self: *App) !void {
 
     try self.vx.enterAltScreen(writer);
 
-    self.notes_list = try .init(self.alloc, self);
-    self.directory_tree = try .init(self.alloc, self);
-    self.editor = try .init(self.alloc);
+    self.directory_tree = try .init(self.alloc, "Folders", self);
+    self.notes_list = try .init(self.alloc, "Notes", self);
+    self.editor = try .init(self.alloc, "Editor", self);
     self.status_bar = try .init(self.alloc);
 
     try writer.flush();
@@ -142,17 +142,20 @@ fn initComponents(self: *App, win: vaxis.Window) !void {
     self.directory_tree.cell.setHeight(win.height - sb_height);
     self.directory_tree.cell.setOffsetY(0);
     self.directory_tree.draw(win);
+    self.directory_tree.drawHeader(win, 1);
 
     self.notes_list.cell.setHeight(win.height - sb_height);
     self.notes_list.cell.setOffsetY(0);
     self.notes_list.cell.setOffsetX(self.directory_tree.cell.width);
     self.notes_list.draw(win);
+    self.notes_list.drawHeader(win, self.directory_tree.cell.width + 1);
 
     const editor_xoff = self.notes_list.cell.width + self.directory_tree.cell.width;
     self.editor.cell.setHeight(win.height - sb_height);
     self.editor.cell.setOffsetY(0);
     self.editor.cell.setOffsetX(editor_xoff);
     self.editor.draw(win);
+    try self.editor.drawHeader(win, editor_xoff + 1);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);
     self.status_bar.draw(win);

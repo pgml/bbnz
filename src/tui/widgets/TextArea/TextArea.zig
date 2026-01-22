@@ -61,6 +61,10 @@ pub fn init(alloc: std.mem.Allocator) !TextArea {
 }
 
 pub fn update(self: *TextArea, event: Event) !void {
+    if (!self.is_focucsed) {
+        return;
+    }
+
     if (self.vim.enabled) {
         try self.vim.update(event, self);
     } else {
@@ -86,12 +90,16 @@ pub fn update(self: *TextArea, event: Event) !void {
     }
 }
 
-pub fn draw(self: *TextArea) void {
+pub fn draw(self: *TextArea) !void {
     var style: vx.Cell.Style = .{};
 
-    if (self.win == null or self.scroll_view == null) {
+    if (self.win == null or
+        self.scroll_view == null or
+        !self.hasBuffers())
+    {
         return;
     }
+
     const win: vx.Window = self.win.?;
     const view: *vx.widgets.ScrollView = self.scroll_view.?;
 

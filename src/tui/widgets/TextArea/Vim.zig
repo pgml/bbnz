@@ -414,7 +414,12 @@ fn dCmd(self: *Vim) void {
     switch (self.cp) {
         'd' => self.textarea.deleteCurLine(true),
         'j' => self.textarea.deleteNLines(2),
-        else => {},
+        else => {
+            // just return without updating the history if any other key
+            // was pressed
+            self.resetSeq();
+            return;
+        },
     }
     self.textarea.updateHistoryEntry() catch return;
     self.resetSeq();

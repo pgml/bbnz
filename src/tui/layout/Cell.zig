@@ -1,3 +1,5 @@
+//! Cell represents not a terminal cell but a layout cell such as the
+//! editor, directory tree, status bar columns or a row of a list view.
 const Cell = @This();
 
 const std = @import("std");
@@ -101,4 +103,16 @@ fn borderOpts(self: Cell) vx.Window.BorderOptions {
         .glyphs = .single_square,
         .style = .{ .fg = color },
     };
+}
+
+pub fn get(grapheme: []const u8, width: u8, style: vx.Style) vx.Cell {
+    return .{
+        .char = .{ .grapheme = grapheme, .width = width },
+        .style = style,
+    };
+}
+
+pub fn write(win: vx.Window, col: *u16, row: u16, cell: vx.Cell) void {
+    win.writeCell(col.*, row, cell);
+    col.* += @intCast(cell.char.width);
 }

@@ -188,12 +188,16 @@ pub fn findBuf(self: TextArea, path: []const u8) ?*Buffer {
     return null;
 }
 
-pub fn numBufs(self: *TextArea) usize {
+pub fn numBufs(self: TextArea) usize {
     return self.buffers.items.len;
 }
 
+pub fn hasBuffers(self: TextArea) bool {
+    return self.numBufs() > 0;
+}
+
 /// Returns the current buffer.
-pub fn curBuf(self: *TextArea) *Buffer {
+pub fn curBuf(self: TextArea) *Buffer {
     var buf_index = self.buffer;
     if (buf_index > self.numBufs()) {
         buf_index = self.numBufs() - 1;
@@ -208,7 +212,7 @@ pub fn enableVimMode(self: *TextArea) !void {
 
 /// Insert text at the cursor position
 pub fn insertSliceAtCursor(self: *TextArea, data: []const u8) !void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     var cur_row = buf.curRow();
     cur_row.col = buf.col;
 
@@ -230,7 +234,7 @@ pub fn insertSliceAtCursor(self: *TextArea, data: []const u8) !void {
 /// Remove the character at `index`.
 /// If vim is enabled the cursor will be moved one character to the left.
 pub fn deleteCharAt(self: *TextArea, index: i32) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     var cur_row: *Buffer.Row = buf.curRow();
 
     // Skip if we're at the start of an empty line or
@@ -257,7 +261,7 @@ pub fn deleteCurChar(self: *TextArea) void {
 /// Removes all remaining characters of the current row
 /// starting from the cursor's position.
 pub fn deleteAfterCursor(self: *TextArea) !void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     var cur_row: *Buffer.Row = buf.curRow();
     const col: u32 = @intCast(buf.col);
     const after_cursor: []Character = cur_row.getValue()[col..];
@@ -278,7 +282,7 @@ pub fn deleteAfterCursor(self: *TextArea) !void {
 /// If the cursor is not at the end of a line, the line gets automatically
 /// split, moving the text after (including) the cursor onto the new line.
 pub fn addNewLine(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const new_row: i32 = buf.row + 1;
 
     if (new_row > buf.rows.items.len or
@@ -294,7 +298,7 @@ pub fn addNewLine(self: *TextArea) void {
 
 /// Add an empty line below the current one.
 pub fn addLineBelow(self: *TextArea) !void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const new_row: u32 = @intCast(buf.row + 1);
     if (new_row <= buf.rows.items.len) {
         try buf.addRowAt(new_row, 0);
@@ -304,13 +308,14 @@ pub fn addLineBelow(self: *TextArea) !void {
 
 /// Add an empty line above the current one.
 pub fn addLineAbove(self: *TextArea) !void {
-    try self.curBuf().addRowAt(@intCast(self.curBuf().row), 0);
-    self.curBuf().col = 0;
+    const buf: *Buffer = self.curBuf();
+    try buf.addRowAt(@intCast(buf.row), 0);
+    buf.col = 0;
 }
 
 /// Deletes the next line and moves its content to the current line.
 pub fn joinLine(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const next_index: i32 = buf.row + 1;
 
     if (next_index >= buf.rows.items.len) {
@@ -351,7 +356,7 @@ pub fn joinLine(self: *TextArea) void {
 /// If `non_white` is true, the cursor moves to the first non-white
 /// character of the line.
 pub fn beginLine(self: *TextArea, non_white: bool) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     buf.col = 0;
     buf.last_col = 0;
 
@@ -370,7 +375,7 @@ pub fn beginLine(self: *TextArea, non_white: bool) void {
 
 /// Moves the cursor to the end of the current line.
 pub fn lineEnd(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const row_len: u16 = @intCast(buf.curRow().len());
     buf.col = if (self.vim.enabled and row_len > 0)
         row_len - 1
@@ -382,7 +387,8 @@ pub fn lineEnd(self: *TextArea) void {
 
 /// Deletes the live at the given `index` and frees its data.
 pub fn deleteLineAt(self: *TextArea, index: i32) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
+
     if (buf.rows.items.len == 0) {
         return;
     }
@@ -417,7 +423,8 @@ pub fn deleteLineAt(self: *TextArea, index: i32) void {
 /// If `keep_cur_pos` is false the cursor is moved to the
 /// beginning of the line.
 pub fn deleteCurLine(self: *TextArea, keep_cur_pos: bool) void {
-    self.deleteLineAt(self.curBuf().row);
+    const buf: *Buffer = self.curBuf();
+    self.deleteLineAt(buf.row);
 
     if (!keep_cur_pos) {
         self.beginLine(false);
@@ -435,6 +442,7 @@ pub fn deleteNLines(self: *TextArea, n: usize) void {
 /// in the viewport.
 pub fn repositionView(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
+
     if (self.scroll_view) |view| {
         const min = view.scroll.y;
         const max = min + self.height - 1;
@@ -450,7 +458,7 @@ pub fn repositionView(self: *TextArea) void {
 
 /// Moves the cursor one line up.
 pub fn cursorUp(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
 
     if (buf.row > 0) {
         buf.row -= 1;
@@ -480,7 +488,7 @@ pub fn cursorUp(self: *TextArea) void {
 
 /// Moves the cursor one line down.
 pub fn cursorDown(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
 
     if (buf.row + 1 < buf.numRows()) {
         buf.row += 1;
@@ -509,7 +517,8 @@ pub fn cursorDown(self: *TextArea) void {
 
 /// Moves the cursor one character to the left.
 pub fn characterLeft(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
+
     if (buf.col <= 0) {
         return;
     }
@@ -521,7 +530,7 @@ pub fn characterLeft(self: *TextArea) void {
 
 /// Moves the cursor one character to the right.
 pub fn characterRight(self: *TextArea) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const row_val: []Character = buf.curRow().getValue();
 
     var row_len = row_val.len;
@@ -724,14 +733,15 @@ pub fn goToTop(self: *TextArea) void {
 
 /// Moves the cursor to the bottom of the text and repositions the view.
 pub fn goToBottom(self: *TextArea) void {
-    const num_rows: i32 = @intCast(self.curBuf().numRows());
+    const buf: *Buffer = self.curBuf();
+    const num_rows: i32 = @intCast(buf.numRows());
     var last_row: i32 = self.height;
 
     if (num_rows < self.height) {
         last_row = num_rows;
     }
 
-    self.moveCursorTo(num_rows, self.curBuf().col);
+    self.moveCursorTo(num_rows, buf.col);
     self.repositionView();
 }
 
@@ -776,7 +786,7 @@ pub fn moveCursorTo(self: *TextArea, row: i32, col: i32) void {
 /// If `reset_last_col` is true it resets the last cursor position
 /// `Buffer.last_col`.
 pub fn setCursorCol(self: *TextArea, col: i32) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     var row_len: i32 = @intCast(buf.curRow().len());
 
     if (row_len > 0 and self.vim.mode != .insert) {
@@ -787,7 +797,7 @@ pub fn setCursorCol(self: *TextArea, col: i32) void {
 
 /// Moves the cursor to the given row.
 pub fn setCursorRow(self: *TextArea, row: i32) void {
-    var buf: *Buffer = self.curBuf();
+    const buf: *Buffer = self.curBuf();
     const num_rows = buf.numRows();
     const clamped = std.math.clamp(row, 0, num_rows);
 
@@ -860,11 +870,12 @@ pub fn redo(self: *TextArea) void {
 /// Get the terminal row for the current cursor position.
 pub fn getTermRow(self: *TextArea) usize {
     const buf: *Buffer = self.curBuf();
+    var row: usize = 0;
     if (self.scroll_view) |view| {
-        const row: u32 = @intCast(buf.row);
-        return row - view.scroll.y;
+        row = @intCast(buf.row);
+        return @intCast(row - view.scroll.y);
     }
-    return 0;
+    return row;
 }
 
 pub fn deinit(self: *TextArea) void {

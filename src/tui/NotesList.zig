@@ -10,6 +10,7 @@ const fs = @import("../fs.zig");
 const ListItem = @import("ListItem.zig");
 const theme = @import("layout/theme.zig");
 const Icon = theme.Icon;
+const utils = @import("../utils.zig");
 
 alloc: std.mem.Allocator,
 
@@ -49,7 +50,7 @@ scroll_view: vx.widgets.ScrollView,
 
 win: ?vx.Window = null,
 
-const NoteItem = struct {
+pub const NoteItem = struct {
     /// General list data
     data: ListItem,
 
@@ -98,6 +99,11 @@ pub fn update(self: *NotesList, event: App.Event) !void {
                 vx.Key.enter => {
                     if (self.selectedNote()) |note| {
                         try self.app.editor.openBuf(note.data.path);
+                        try self.app.config.meta_infos.setValue(
+                            .last_open_note,
+                            note.data.path,
+                        );
+                        try self.app.config.meta_infos.write();
                     }
                 },
                 else => {},
@@ -161,13 +167,23 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
             Cell.write(win, &col, row, Cell.get(g, w, style));
         }
 
+        // pad the rest of the line to make the selection expand to the whole row
         while (col < width) {
             Cell.write(win, &col, row, Cell.get(" ", 1, style));
         }
     }
 }
 
+pub fn restore(self: *NotesList) !void {
+    const meta = self.app.config.meta_infos;
+    try self.getNotes(meta.last_directory);
+}
+
 pub fn getNotes(self: *NotesList, path: []const u8) !void {
+    if (utils.strEql(path, "")) {
+        return;
+    }
+
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
 

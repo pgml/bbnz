@@ -20,6 +20,10 @@
             .url = "git+https://github.com/ziglibs/known-folders#83d39161eac2ed6f37ad3cb4d9dd518696ce90bb",
             .hash = "known_folders-0.0.0-Fy-PJv3LAAABBRVoZWVrKZdyLoUfl5VRY5fqRRRdnF5L",
         },
+        .microwave = .{
+            .url = "git+https://github.com/edqx/microwave#f3061b21829e7cd3569d8fc0a61414d171998e4f",
+            .hash = "microwave-1.0.0-e4c5GW-sAQDIR9S8IIGWfHveEI70SC_MbqyKnFhNQiFb",
+        },
     },
     .paths = .{
         "build.zig",

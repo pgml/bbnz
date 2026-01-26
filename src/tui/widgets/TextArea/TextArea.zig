@@ -6,10 +6,13 @@ const Key = vx.Key;
 
 const dmp = @import("diffmatchpatch");
 
+pub const App = @import("../../../App.zig");
 pub const Buffer = @import("Buffer.zig");
 pub const Vim = @import("Vim.zig");
 
 alloc: std.mem.Allocator,
+
+app: *App,
 
 /// List of available text buffers
 buffers: std.ArrayList(*Buffer),
@@ -49,9 +52,10 @@ pub const Character = struct {
     is_selected: bool = false,
 };
 
-pub fn init(alloc: std.mem.Allocator) !TextArea {
+pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
     const self: TextArea = .{
         .alloc = alloc,
+        .app = app,
         .buffers = .empty,
         .buffer = 0,
         .vim = try .init(alloc),

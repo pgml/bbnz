@@ -17,9 +17,12 @@ pub const Color = struct {
     };
 };
 
-const border_T = [6][]const u8;
+pub const border_T = [6][]const u8;
 
 pub const Border = struct {
+    pub const none: border_T = .{ "", "", "", "", "", "" };
+    pub const normal: border_T = .{ "┌", "─", "┐", "│", "┘", "└" };
+    pub const rounded: border_T = .{ "╭", "─", "╮", "│", "╯", "╰" };
     pub const double: border_T = .{ "╔", "═", "╗", "║", "╝", "╚" };
     pub const thick: border_T = .{ "┏", "━", "┓", "┃", "┛", "┗" };
 };

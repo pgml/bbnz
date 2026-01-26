@@ -291,6 +291,9 @@ pub fn setMode(self: *Vim, mode: Mode) void {
             if (last_hash != buf_hash) {
                 textarea.updateHistoryEntry() catch return;
             }
+
+            const meta = textarea.app.config.meta_infos;
+            meta.updateFileInfo(buf.path, .cursor_pos, buf.cursor_pos) catch return;
         },
         else => {},
     }

@@ -9,6 +9,7 @@ const Config = @import("../Config.zig");
 const log = @import("../log.zig");
 const TextArea = @import("widgets/TextArea/TextArea.zig");
 pub const Buffer = TextArea.Buffer;
+const utils = @import("../utils.zig");
 
 const theme = @import("layout/theme.zig");
 
@@ -33,7 +34,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
         .alloc = alloc,
         .app = app,
         .cell = try .init(alloc),
-        .textarea = try .init(alloc),
+        .textarea = try .init(alloc, app),
         .scroll_view = .{},
     };
 
@@ -44,11 +45,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
 }
 
 pub fn update(self: *Editor, event: App.Event) !void {
-    if (!self.cell.isFocused()) {
-        return;
-    }
-
-    if (self.textarea.numBufs() == 0) {
+    if (!self.cell.isFocused() or self.textarea.numBufs() == 0) {
         return;
     }
 
@@ -119,6 +116,21 @@ pub fn drawHeader(self: Editor, win: vx.Window, col: u16) !void {
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
 
+pub fn restore(self: *Editor) !void {
+    const meta = self.app.config.meta_infos;
+    if (utils.strEql(meta.last_open_note, "")) {
+        return;
+    }
+    const last_open_note = meta.last_open_note;
+
+    try self.openBuf(last_open_note);
+
+    if (meta.files_info.get(last_open_note)) |file_info| {
+        const curpos = file_info.cursor_pos;
+        self.textarea.moveCursorTo(@intCast(curpos.row), @intCast(curpos.col));
+    }
+}
+
 pub fn openBuf(self: *Editor, path: []const u8) !void {
     try self.textarea.openBuf(path);
     self.textarea.repositionView();
@@ -130,7 +142,7 @@ pub fn getRelativeBufPath(self: Editor, alloc: std.mem.Allocator) ![]const u8 {
     if (self.textarea.hasBuffers()) {
         const buf: *Buffer = self.textarea.curBuf();
         var rel_path: []u8 = try alloc.alloc(u8, buf.path.len);
-        const notes_root = try Config.getNotesRootDir();
+        const notes_root = try self.app.config.getNotesRootDir();
 
         if (std.fs.path.dirname(buf.path)) |dir_name| {
             const len = dir_name.len - notes_root.len;

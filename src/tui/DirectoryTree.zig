@@ -43,7 +43,7 @@ scroll_view: vx.widgets.ScrollView,
 
 win: ?vx.Window = null,
 
-const TreeItem = struct {
+pub const TreeItem = struct {
     /// General list data
     data: ListItem,
 
@@ -100,10 +100,12 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryT
     return self;
 }
 
+pub fn run(self: *DirectoryTree) !void {
+    try self.buildTreeItems();
+}
+
 pub fn update(self: *DirectoryTree, event: App.Event) !void {
-    if (self.tree_items.items.len == 0) {
-        try self.buildTreeItems();
-    }
+    if (self.tree_items.items.len == 0) {}
 
     switch (event) {
         .key_press => |key| {
@@ -113,15 +115,31 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
             }
             if (key.matches('j', .{})) {
                 self.selected_index += 1;
+                try self.app.config.meta_infos.setValue(
+                    .last_directory,
+                    self.selectedDir().data.path,
+                );
+                try self.app.config.meta_infos.write();
             }
             if (key.matches('k', .{})) {
                 self.selected_index -= 1;
+                try self.app.config.meta_infos.setValue(
+                    .last_directory,
+                    self.selectedDir().data.path,
+                );
+                try self.app.config.meta_infos.write();
             }
             if (key.matches('h', .{ .ctrl = false })) {
                 try self.collapseTreeItem(@intCast(self.selected_index));
+                const item = self.getTreeItem(@intCast(self.selected_index));
+                try self.app.config.meta_infos.addFileInfo(item);
+                try self.app.config.meta_infos.write();
             }
             if (key.matches('l', .{ .ctrl = false })) {
                 try self.expandDirItem(@intCast(self.selected_index));
+                const item = self.getTreeItem(@intCast(self.selected_index));
+                try self.app.config.meta_infos.addFileInfo(item);
+                try self.app.config.meta_infos.write();
             }
 
             switch (key.codepoint) {
@@ -213,11 +231,26 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
     }
 }
 
+pub fn restore(self: *DirectoryTree) !void {
+    const meta = self.app.config.meta_infos;
+    self.setRowByPath(meta.last_directory);
+
+    var i: usize = 0;
+    for (self.tree_items.items) |item| {
+        if (meta.files_info.get(item.data.path)) |file_info| {
+            if (file_info.is_expanded) {
+                try self.expandDirItem(i);
+            }
+        }
+        i += 1;
+    }
+}
+
 /// Builds the initial directory tree from the notes root directory
 fn buildTreeItems(self: *DirectoryTree) !void {
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
-    const notes_root = try Config.getNotesRootDir();
+    const notes_root = try self.app.config.getNotesRootDir();
     const tmp_dir_entries = try fs.Directories.list(arena.allocator(), notes_root);
 
     for (tmp_dir_entries) |entry| {
@@ -321,6 +354,24 @@ fn createDirItem(
 
 fn getTreeItem(self: DirectoryTree, index: usize) *TreeItem {
     return self.tree_items.items[index];
+}
+
+pub fn setRowByPath(self: *DirectoryTree, path: []const u8) void {
+    const index = self.getIndexByPath(path);
+    self.selected_index = @intCast(index);
+}
+
+pub fn getIndexByPath(self: DirectoryTree, path: []const u8) usize {
+    var i: usize = 0;
+    // @todo iterate through child directories as well
+    for (self.tree_items.items) |item| {
+        std.log.debug("{s} {s}", .{ item.data.path, path });
+        if (utils.strEql(item.data.path, path)) {
+            return i;
+        }
+        i += 1;
+    }
+    return 0;
 }
 
 fn selectedDir(self: DirectoryTree) *TreeItem {

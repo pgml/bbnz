@@ -38,9 +38,10 @@ pub fn toFile(
         return std.log.defaultLog(message_level, scope, format, args);
     }
 
-    const conf_dir_path = Config.getConfDirPath() catch {
+    const conf_dir_path = Config.getConfDirPath(alloc) catch {
         return std.log.defaultLog(message_level, scope, format, args);
     };
+    defer alloc.free(conf_dir_path);
 
     var conf_dir = std.fs.openDirAbsolute(conf_dir_path, .{}) catch {
         return std.log.defaultLog(message_level, scope, format, args);

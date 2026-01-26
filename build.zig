@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     const dmp = b.dependency("diffmatchpatch", .{});
     //const zig_time_dep = b.dependency("zig-time", .{});
     const known_folders = b.dependency("known-folders", .{}).module("known-folders");
+    const microwave = b.dependency("microwave", .{}).module("microwave");
 
     const exe = b.addExecutable(.{
         .name = "bbnotes",
@@ -23,6 +24,7 @@ pub fn build(b: *std.Build) void {
     //exe.root_module.addImport("zig-time", zig_time_dep.module("zig-time"));
     exe.root_module.addImport("diffmatchpatch", dmp.module("diffmatchpatch"));
     exe.root_module.addImport("known-folders", known_folders);
+    exe.root_module.addImport("microwave", microwave);
 
     b.installArtifact(exe);
 

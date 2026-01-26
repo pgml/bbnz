@@ -30,6 +30,12 @@ status_bar: *StatusBar,
 
 current_column: u16 = 1,
 
+last_column: u16 = 0,
+
+mode: Editor.TextArea.Vim.Mode = .normal,
+
+win: vaxis.Window = undefined,
+
 pub const Event = union(enum) {
     key_press: vaxis.Key,
     key_release: vaxis.Key,
@@ -69,7 +75,7 @@ pub fn run(self: *App) !void {
     self.directory_tree = try .init(self.alloc, "Folders", self);
     self.notes_list = try .init(self.alloc, "Notes", self);
     self.editor = try .init(self.alloc, "Editor", self);
-    self.status_bar = try .init(self.alloc);
+    self.status_bar = try .init(self.alloc, self);
 
     try writer.flush();
     try self.vx.queryTerminal(self.tty.writer(), 1 * std.time.ns_per_s);
@@ -83,11 +89,7 @@ pub fn run(self: *App) !void {
 
         switch (event) {
             .key_press => |key| {
-                if (key.matches('c', .{ .ctrl = true })) {
-                    try self.config.meta_infos.write();
-                    self.should_quit = true;
-                    return;
-                }
+                _ = key;
             },
             .winsize => |ws| {
                 try self.vx.resize(self.alloc, self.tty.writer(), ws);
@@ -121,6 +123,7 @@ pub fn update(self: *App, event: Event) !void {
                 );
                 try self.config.meta_infos.write();
             }
+
             if (key.matches('h', .{ .ctrl = true })) {
                 self.focusPrevColumn(true);
                 self.config.meta_infos.current_column = self.current_column;
@@ -129,6 +132,20 @@ pub fn update(self: *App, event: Event) !void {
                     self.current_column,
                 );
                 try self.config.meta_infos.write();
+            }
+
+            if (key.matches(':', .{})) {
+                self.last_column = self.current_column;
+                // unfocus all colums by setting index to 0
+                self.focusColumn(0);
+                self.status_bar.focus();
+            }
+
+            if (key.matches(vaxis.Key.escape, .{})) {
+                if (self.mode == .command) {
+                    self.focusColumn(self.last_column);
+                    self.status_bar.blur();
+                }
             }
         },
         .winsize => |ws| {
@@ -142,6 +159,7 @@ pub fn draw(self: *App) !void {
     var win: vaxis.Window = self.vx.window();
     win.clear();
     try self.initComponents(win);
+    self.win = win;
 }
 
 fn restoreState(self: *App) !void {
@@ -174,7 +192,7 @@ fn initComponents(self: *App, win: vaxis.Window) !void {
     try self.editor.drawHeader(win, editor_xoff + 1);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);
-    self.status_bar.draw(win);
+    try self.status_bar.draw(win);
 }
 
 pub fn focusColumn(self: *App, index: u16) void {
@@ -210,6 +228,15 @@ pub fn focusPrevColumn(self: *App, cycle: bool) void {
 
     const column = @max(current_column - 1, first_col);
     return self.focusColumn(column);
+}
+
+pub fn setMode(self: *App, mode: Editor.TextArea.Vim.Mode) void {
+    self.mode = mode;
+}
+
+pub fn quit(self: *App) !void {
+    try self.config.meta_infos.write();
+    self.should_quit = true;
 }
 
 pub fn deinit(self: *App) void {

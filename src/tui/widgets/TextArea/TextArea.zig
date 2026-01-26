@@ -880,7 +880,7 @@ pub fn redo(self: *TextArea) void {
 }
 
 /// Get the terminal row for the current cursor position.
-pub fn getTermRow(self: *TextArea) usize {
+pub fn getTermRow(self: TextArea) usize {
     const buf: *Buffer = self.curBuf();
     var row: usize = 0;
     if (self.scroll_view) |view| {

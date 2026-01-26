@@ -61,6 +61,20 @@ pub const Mode = enum {
             else => [_]u8{ 140, 140, 140 },
         };
     }
+
+    const tbl = [@typeInfo(Mode).@"enum".fields.len][:0]const u8{
+        "normal",
+        "insert",
+        "replace",
+        ":",
+        "visual",
+        "visual line",
+        "visual block",
+    };
+
+    pub fn str(self: Mode) [:0]const u8 {
+        return tbl[@intFromEnum(self)];
+    }
 };
 
 const v_fn = *const fn (self: *Vim) void;
@@ -281,6 +295,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
     switch (mode) {
         .insert => {
             textarea.newHistoryEntry();
+            self.textarea.app.mode = .insert;
         },
         .normal => {
             const last_hash = Buffer.fastHash(textarea.prev_value);
@@ -294,6 +309,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
 
             const meta = textarea.app.config.meta_infos;
             meta.updateFileInfo(buf.path, .cursor_pos, buf.cursor_pos) catch return;
+            self.textarea.app.mode = .normal;
         },
         else => {},
     }
@@ -467,6 +483,8 @@ fn esc(self: *Vim) void {
         },
         else => {},
     }
+
+    self.textarea.app.mode = .normal;
 }
 
 pub fn deinit(self: *Vim) void {

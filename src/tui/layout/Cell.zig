@@ -114,25 +114,25 @@ pub fn get(grapheme: []const u8, width: u8, style: vx.Style) vx.Cell {
     };
 }
 
-pub fn write(win: vx.Window, col: *u16, row: u16, cell: vx.Cell) void {
-    win.writeCell(col.*, row, cell);
-    col.* += @intCast(cell.char.width);
+pub fn write(win: vx.Window, col: *u16, row: u16, value: []const u8, style: vx.Style) void {
+    var cmd_iter = vx.unicode.graphemeIterator(value);
+    while (cmd_iter.next()) |grapheme| {
+        const g = grapheme.bytes(value);
+        const w: u8 = @intCast(win.gwidth(g));
+        win.writeCell(col.*, row, Cell.get(g, w, style));
+        col.* += @intCast(w);
+    }
 }
 
 pub fn drawHeader(win: vx.Window, title: []const u8, col: u16, is_focused: bool) void {
     var c = col;
-    var iter = vx.unicode.graphemeIterator(title);
 
     var style: vx.Style = .{ .fg = theme.Color.CellHeader.fg };
     if (is_focused) {
         style = .{ .fg = theme.Color.CellHeader.fg_focused };
     }
 
-    Cell.write(win, &c, 0, Cell.get(" ", 1, style));
-    while (iter.next()) |grapheme| {
-        const g = grapheme.bytes(title);
-        const w: u8 = @intCast(win.gwidth(g));
-        Cell.write(win, &c, 0, Cell.get(g, w, style));
-    }
-    Cell.write(win, &c, 0, Cell.get(" ", 1, style));
+    Cell.write(win, &c, 0, " ", .{});
+    Cell.write(win, &c, 0, title, style);
+    Cell.write(win, &c, 0, " ", .{});
 }

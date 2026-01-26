@@ -210,23 +210,18 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
         }
 
         for (1..pad_left + item.level) |_| {
-            Cell.write(win, &col, row, Cell.get("  ", 2, style));
+            Cell.write(win, &col, row, "  ", style);
         }
 
-        Cell.write(win, &col, row, Cell.get(has_children, 1, style));
-        Cell.write(win, &col, row, Cell.get(" ", 1, style));
-        Cell.write(win, &col, row, Cell.get(dir_icon, 1, style));
-        Cell.write(win, &col, row, Cell.get(" ", 1, style));
+        Cell.write(win, &col, row, has_children, style);
+        Cell.write(win, &col, row, " ", style);
+        Cell.write(win, &col, row, dir_icon, style);
+        Cell.write(win, &col, row, " ", style);
 
-        var iter = vx.unicode.graphemeIterator(item.data.name);
-        while (iter.next()) |grapheme| {
-            const g = grapheme.bytes(item.data.name);
-            const w: u8 = @intCast(win.gwidth(g));
-            Cell.write(win, &col, row, Cell.get(g, w, style));
-        }
+        Cell.write(win, &col, row, item.data.name, style);
 
         while (col < width) {
-            Cell.write(win, &col, row, Cell.get(" ", 1, style));
+            Cell.write(win, &col, row, " ", style);
         }
     }
 }

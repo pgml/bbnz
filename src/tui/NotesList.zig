@@ -156,20 +156,14 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
     var col: u16 = 0;
 
     if (self.win) |win| {
-        Cell.write(win, &col, row, Cell.get(" ", 1, style));
-        Cell.write(win, &col, row, Cell.get(Icon.getNerd(.note), 1, style));
-        Cell.write(win, &col, row, Cell.get(" ", 1, style));
-
-        var iter = vx.unicode.graphemeIterator(item.data.name);
-        while (iter.next()) |grapheme| {
-            const g = grapheme.bytes(item.data.name);
-            const w: u8 = @intCast(win.gwidth(g));
-            Cell.write(win, &col, row, Cell.get(g, w, style));
-        }
+        Cell.write(win, &col, row, " ", style);
+        Cell.write(win, &col, row, Icon.getNerd(.note), style);
+        Cell.write(win, &col, row, " ", style);
+        Cell.write(win, &col, row, item.data.name, style);
 
         // pad the rest of the line to make the selection expand to the whole row
         while (col < width) {
-            Cell.write(win, &col, row, Cell.get(" ", 1, style));
+            Cell.write(win, &col, row, " ", style);
         }
     }
 }

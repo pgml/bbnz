@@ -378,7 +378,10 @@ pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
     var reader = file.reader(self.read_buf);
     var i: usize = 0;
 
-    while (try reader.interface.takeDelimiter('\n')) |line| {
+    try reader.interface.readSliceAll(self.read_buf);
+    var lines = std.mem.splitAny(u8, self.read_buf, "\n");
+
+    while (lines.next()) |line| {
         defer i += 1;
 
         if (i > 0) {

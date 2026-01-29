@@ -21,9 +21,11 @@ win: ?vx.Window = null,
 
 //content_cols: [4]*Cell,
 
-info_column: *InfoColumn,
+general_info_column: *Column,
 
-const InfoColumn = struct {
+file_info_column: *Column,
+
+const Column = struct {
     arena: std.heap.ArenaAllocator,
 
     alloc: std.mem.Allocator,
@@ -34,8 +36,8 @@ const InfoColumn = struct {
 
     col: i32 = 0,
 
-    pub fn init(alloc: std.mem.Allocator) !*InfoColumn {
-        const self = try alloc.create(InfoColumn);
+    pub fn init(alloc: std.mem.Allocator) !*Column {
+        const self = try alloc.create(Column);
 
         self.* = .{
             .arena = .init(alloc),
@@ -48,7 +50,7 @@ const InfoColumn = struct {
         return self;
     }
 
-    pub fn insertSliceAtCursor(self: *InfoColumn, slice: []const u8) !void {
+    pub fn insertSliceAtCursor(self: *Column, slice: []const u8) !void {
         try self.value.insert(self.alloc, @intCast(self.col), .{
             .grapheme = slice,
             .width = 1,
@@ -57,7 +59,7 @@ const InfoColumn = struct {
     }
 
     /// Removes the last character
-    pub fn deleteCharBefore(self: *InfoColumn) void {
+    pub fn deleteCharBefore(self: *Column) void {
         if (self.col > 0) {
             _ = self.value.orderedRemove(@intCast(self.col - 1));
             self.value.shrinkAndFree(self.alloc, self.value.items.len);
@@ -65,7 +67,7 @@ const InfoColumn = struct {
         }
     }
 
-    pub fn setValue(self: *InfoColumn, win: vx.Window, str: []const u8) !void {
+    pub fn setValue(self: *Column, win: vx.Window, str: []const u8) !void {
         const str_cpy = try self.alloc.dupe(u8, str);
         var cmd_iter = vx.unicode.graphemeIterator(str_cpy);
         while (cmd_iter.next()) |grapheme| {
@@ -75,11 +77,11 @@ const InfoColumn = struct {
         }
     }
 
-    pub fn getValue(self: InfoColumn) []vx.Cell.Character {
+    pub fn getValue(self: Column) []vx.Cell.Character {
         return self.value.items;
     }
 
-    pub fn getValueStr(self: InfoColumn) ![]const u8 {
+    pub fn getValueStr(self: Column) ![]const u8 {
         var val: std.ArrayList(u8) = .empty;
         for (self.getValue()) |char| {
             try val.appendSlice(self.alloc, char.grapheme);
@@ -87,13 +89,13 @@ const InfoColumn = struct {
         return try val.toOwnedSlice(self.alloc);
     }
 
-    pub fn clear(self: *InfoColumn) void {
+    pub fn clear(self: *Column) void {
         self.value.shrinkAndFree(self.alloc, 0);
         self.value = .empty;
         self.col = 0;
     }
 
-    pub fn deinit(self: *InfoColumn) void {
+    pub fn deinit(self: *Column) void {
         self.arena.deinit();
     }
 };
@@ -105,12 +107,13 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*StatusBar 
         .alloc = alloc,
         .app = app,
         .cell = try .init(alloc),
-        .info_column = try .init(alloc),
+        .general_info_column = try .init(alloc),
+        .file_info_column = try .init(alloc),
     };
 
     self.cell.setHeight(self.default_height);
     self.cell.title = title;
-    self.info_column.cell.setOffsetX(self.cell.offset_x);
+    self.general_info_column.cell.setOffsetX(self.cell.offset_x);
 
     return self;
 }
@@ -123,7 +126,7 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
     switch (event) {
         .key_press => |key| {
             if (key.matches(vx.Key.enter, .{})) {
-                const val = try self.info_column.getValueStr();
+                const val = try self.general_info_column.getValueStr();
 
                 if (utils.strEql(val, "q")) {
                     return try self.app.quit();
@@ -134,7 +137,7 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
                 }
             }
             if (key.text) |text| {
-                try self.info_column.insertSliceAtCursor(text);
+                try self.general_info_column.insertSliceAtCursor(text);
             }
         },
         else => {},
@@ -158,17 +161,21 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
         var content: []const u8 = "";
         if (self.shouldShowMode()) {
             if (self.app.mode != .command) {
-                self.info_column.clear();
+                self.general_info_column.clear();
             }
             content = try self.getModeStr(arena.allocator());
         }
-        try self.drawInfoCol(child_win, content);
+        try self.drawGeneralInfoCol(child_win, content);
+    }
+
+    {
+        try self.drawFileInfoCol(child_win);
     }
 }
 
-fn drawInfoCol(self: *StatusBar, win: vx.Window, content: []const u8) !void {
+fn drawGeneralInfoCol(self: *StatusBar, win: vx.Window, content: []const u8) !void {
     var col: u16 = 1;
-    var col_opts = self.info_column.cell.getChild();
+    var col_opts = self.general_info_column.cell.getChild();
     // Reset border
     col_opts.border = .{};
     const child_win = win.child(col_opts);
@@ -177,13 +184,18 @@ fn drawInfoCol(self: *StatusBar, win: vx.Window, content: []const u8) !void {
     Cell.write(child_win, &col, 0, content, .{});
 
     // Display user input prompt
-    for (self.info_column.value.items) |*char| {
+    for (self.general_info_column.value.items) |*char| {
         Cell.write(child_win, &col, 0, char.grapheme, .{});
     }
 
     if (self.cell.isFocused()) {
         child_win.showCursor(col, 0);
     }
+}
+
+fn drawFileInfoCol(self: *StatusBar, win: vx.Window) !void {
+    _ = self;
+    _ = win;
 }
 
 /// Tells the textarea to save the buffer and prints a success message
@@ -213,7 +225,7 @@ fn write(self: *StatusBar) !void {
     });
 
     if (self.win) |win| {
-        try self.info_column.setValue(win, success);
+        try self.general_info_column.setValue(win, success);
     }
 }
 
@@ -235,9 +247,7 @@ fn getModeStr(self: StatusBar, alloc: std.mem.Allocator) ![]const u8 {
     defer alloc.free(buf);
 
     mode_str = std.ascii.upperString(buf, mode_str);
-    if (mode != .command and mode != .visual_block and mode != .visual_line and
-        mode != .visual)
-    {
+    if (mode != .command) {
         mode_str = try std.mem.concat(alloc, u8, &[_][]const u8{
             "-- ", mode_str, " --",
         });
@@ -250,12 +260,12 @@ fn getModeStr(self: StatusBar, alloc: std.mem.Allocator) ![]const u8 {
 
 pub fn reset(self: *StatusBar) void {
     self.app.mode = .normal;
-    self.info_column.clear();
+    self.general_info_column.clear();
 }
 
 pub fn focus(self: *StatusBar) void {
     self.app.mode = .command;
-    self.info_column.clear();
+    self.general_info_column.clear();
     self.cell.focus();
 }
 
@@ -268,7 +278,9 @@ pub fn deinit(self: *StatusBar) void {
     //for (0..self.content_cols.len) |i| {
     //    self.alloc.destroy(self.content_cols[i]);
     //}
-    self.info_column.deinit();
-    self.alloc.destroy(self.info_column);
+    self.general_info_column.deinit();
+    self.alloc.destroy(self.general_info_column);
+    self.file_info_column.deinit();
+    self.alloc.destroy(self.file_info_column);
     self.alloc.destroy(self.cell);
 }

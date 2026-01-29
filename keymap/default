@@ -68,9 +68,9 @@ mode normal(BufferList) {
 # Folder commands
 # —————————————————————————————————————————————————————————————————————————————
 mode normal(Folders) {
-    bind "l"    fn: treeExpand
-    bind "h"    fn: treeCollapse
-    bind "d"    fn: createFolder  #todo
+    bind "l"    fn: dirtree.treeExpand
+    bind "h"    fn: dirtree.treeCollapse
+    bind "d"    fn: dirtree.createFolder  #todo
 }
 
 # —————————————————————————————————————————————————————————————————————————————
@@ -84,7 +84,7 @@ mode command {
 # Notes commands
 # —————————————————————————————————————————————————————————————————————————————
 mode normal(Notes) {
-    bind "%"    fn: createNote   #todo
+    bind "%"    fn: notes.create   #todo
 }
 
 # —————————————————————————————————————————————————————————————————————————————
@@ -98,9 +98,10 @@ mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
     bind "_"     fn: editor.lineStart    flags: [non_white]
     bind "$"     fn: editor.lineEnd
 
-    bind "F"     fn: editor.findChar     flags: [op, await, prev]  #todo
+    bind "F"     fn: editor.findChar           flags: [op, await, prev]  #todo
     bind "G"     fn: editor.goToBottom
     bind "J"     fn: editor.mergeLines
+    bind "V"     fn: editor.toggleVisualMode   flags: [line]
 
     bind "b"     fn: editor.prevWord
     bind "e"     fn: editor.nextWord     flags: [end]
@@ -109,8 +110,7 @@ mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
     bind "j"     fn: editor.lineDown
     bind "k"     fn: editor.lineUp
     bind "l"     fn: editor.charRight
-    bind "v"     fn: editor.toggleVisual                           #todo
-    bind "V"     fn: editor.toggleVisualLine                       #todo
+    bind "v"     fn: editor.toggleVisualMode
     bind "w"     fn: editor.nextWord
     bind "s"     fn: editor.substituteText                         #todo
     bind "x"     fn: editor.delChar
@@ -123,7 +123,7 @@ mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
 
     bind "C-d"   fn: editor.halfPageDown
     bind "C-u"   fn: editor.halfPageUp
-    bind "esc"   fn: editor.cancelAction
+    bind "esc"   fn: editor.enterNormalMode
 }
 
 # normal mode editor commands

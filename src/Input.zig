@@ -71,8 +71,6 @@ const FnMap = struct {
 const fn_registry = [_]FnMap{
     .{ .name = "lineDown",          .exec = .{ .input = lineDown }},
     .{ .name = "lineUp",            .exec = .{ .input = lineUp }},
-    .{ .name = "treeExpand",        .exec = .{ .tree = DirectoryTree.cmdExpand }},
-    .{ .name = "treeCollapse",      .exec = .{ .tree = DirectoryTree.cmdCollapse }},
     .{ .name = "cmd",               .exec = .{ .input = cmd }},
     .{ .name = "confirmAction",     .exec = .{ .input = confirmAction }},
     .{ .name = "cancelAction",      .exec = .{ .input = cancelAction }},
@@ -81,6 +79,9 @@ const fn_registry = [_]FnMap{
     .{ .name = "goToTop",           .exec = .{ .input = goToTop }},
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
     .{ .name = "closeNote",         .exec = .{ .input = closeNote }},
+
+    .{ .name = "dirtree.treeExpand",     .exec = .{ .tree = DirectoryTree.cmdExpand }},
+    .{ .name = "dirtree.treeCollapse",   .exec = .{ .tree = DirectoryTree.cmdCollapse }},
 
     .{ .name = "statusbar.deleteBefore",  .exec = .{ .input = statusBarDeleteBefore }},
 
@@ -708,7 +709,7 @@ fn closeNote(self: *Input, flags: ?Flags) void {
 fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
     _ = flags;
     const statusbar = self.app.status_bar;
-    statusbar.info_column.deleteCharBefore();
+    statusbar.general_info_column.deleteCharBefore();
 }
 
 pub fn deinit(self: *Input) void {

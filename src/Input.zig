@@ -180,7 +180,6 @@ const KeyMap = struct {
             const keybind = try self.getKeyBind(rest) orelse continue;
 
             var fn_name: []const u8 = "";
-            var mode: TextArea.Vim.Mode = .normal;
             var components = std.ArrayList([]const u8).empty;
             var flags: ?Flags = null;
 
@@ -221,9 +220,6 @@ const KeyMap = struct {
                 if (std.mem.eql(u8, key, "fn")) {
                     // get a copy of the function name.
                     fn_name = try self.alloc.dupe(u8, val);
-                } else if (std.mem.eql(u8, key, "mode")) {
-                    // resolve the mode string into the mode enum
-                    mode = resolveMode(val);
                 } else if (std.mem.eql(u8, key, "flags")) {
                     // @todo make flags work with spaces
                     // currently only [end,prev,bla] works

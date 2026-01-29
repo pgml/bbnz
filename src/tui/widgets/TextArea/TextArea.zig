@@ -245,26 +245,33 @@ pub fn insertSliceAtCursor(self: *TextArea, data: []const u8) !void {
 
 /// Remove the character at `index`.
 /// If vim is enabled the cursor will be moved one character to the left.
-pub fn deleteCharAt(self: *TextArea, index: i32) void {
+/// Returns true on a succesful deletion.
+pub fn deleteCharAt(self: *TextArea, index: i32) bool {
     const buf: *Buffer = self.curBuf();
     var cur_row: *Buffer.Row = buf.curRow();
 
     // Skip if we're at the start of an empty line or
     // index is out of bound
     if (cur_row.len() <= 0 or index > cur_row.len()) {
-        return;
+        return false;
     }
 
     _ = cur_row.deleteCharAt(@intCast(index));
     cur_row.shrinkAndFree();
     buf.col = index;
+
+    return true;
 }
 
 /// Removes the character at the cursor position.
 pub fn deleteCurChar(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     const row_len: i16 = @intCast(buf.curRow().len());
-    self.deleteCharAt(@intCast(buf.col));
+
+    if (!self.deleteCharAt(@intCast(buf.col))) {
+        return;
+    }
+
     if (buf.col == row_len - 1) {
         self.characterLeft();
     }

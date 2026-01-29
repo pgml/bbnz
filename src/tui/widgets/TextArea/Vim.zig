@@ -446,8 +446,9 @@ pub fn del(self: *Vim, flags: ?Input.Flags) void {
             self.textarea.newHistoryEntry();
             const buf = self.textarea.curBuf();
             const col = if (buf.col > 0) buf.col - 1 else buf.col;
-            self.textarea.deleteCharAt(col);
-            self.textarea.updateHistoryEntry() catch return;
+            if (self.textarea.deleteCharAt(col)) {
+                self.textarea.updateHistoryEntry() catch return;
+            }
         },
         else => self.resetSeq(),
     }

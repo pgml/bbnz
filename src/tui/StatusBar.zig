@@ -17,11 +17,15 @@ default_width: u16 = 0,
 
 default_height: u16 = 1,
 
+win: ?vx.Window = null,
+
 //content_cols: [4]*Cell,
 
 info_column: *InfoColumn,
 
 const InfoColumn = struct {
+    arena: std.heap.ArenaAllocator,
+
     alloc: std.mem.Allocator,
 
     cell: *Cell,
@@ -34,10 +38,11 @@ const InfoColumn = struct {
         const self = try alloc.create(InfoColumn);
 
         self.* = .{
-            .alloc = alloc,
+            .arena = .init(alloc),
+            .alloc = self.arena.allocator(),
             .value = .empty,
             .col = 0,
-            .cell = try .init(alloc),
+            .cell = try .init(self.alloc),
         };
 
         return self;
@@ -60,6 +65,16 @@ const InfoColumn = struct {
         }
     }
 
+    pub fn setValue(self: *InfoColumn, win: vx.Window, str: []const u8) !void {
+        const str_cpy = try self.alloc.dupe(u8, str);
+        var cmd_iter = vx.unicode.graphemeIterator(str_cpy);
+        while (cmd_iter.next()) |grapheme| {
+            const g = grapheme.bytes(str_cpy);
+            const w: u8 = @intCast(win.gwidth(g));
+            try self.value.append(self.alloc, .{ .grapheme = g, .width = w });
+        }
+    }
+
     pub fn getValue(self: InfoColumn) []vx.Cell.Character {
         return self.value.items;
     }
@@ -79,8 +94,7 @@ const InfoColumn = struct {
     }
 
     pub fn deinit(self: *InfoColumn) void {
-        self.value.deinit(self.alloc);
-        self.alloc.destroy(self.cell);
+        self.arena.deinit();
     }
 };
 
@@ -110,10 +124,13 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
         .key_press => |key| {
             if (key.matches(vx.Key.enter, .{})) {
                 const val = try self.info_column.getValueStr();
-                defer self.alloc.free(val);
 
                 if (utils.strEql(val, "q")) {
                     return try self.app.quit();
+                }
+
+                if (utils.strEql(val, "w")) {
+                    return try self.write();
                 }
             }
             if (key.text) |text| {
@@ -129,6 +146,10 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
     child_opts.border = .{};
     const child_win = win.child(child_opts);
 
+    if (self.win == null) {
+        self.win = child_win;
+    }
+
     // Use an arena for string manipulations for each draw
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
@@ -136,6 +157,9 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
     {
         var content: []const u8 = "";
         if (self.shouldShowMode()) {
+            if (self.app.mode != .command) {
+                self.info_column.clear();
+            }
             content = try self.getModeStr(arena.allocator());
         }
         try self.drawInfoCol(child_win, content);
@@ -159,6 +183,37 @@ fn drawInfoCol(self: *StatusBar, win: vx.Window, content: []const u8) !void {
 
     if (self.cell.isFocused()) {
         child_win.showCursor(col, 0);
+    }
+}
+
+/// Tells the textarea to save the buffer and prints a success message
+/// in the statusbar
+fn write(self: *StatusBar) !void {
+    var arena: std.heap.ArenaAllocator = .init(self.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const editor = self.app.editor;
+    const buf = editor.textarea.curBuf();
+    const rel_path = try editor.getRelativeBufPath(alloc);
+    const bytes = try editor.textarea.writeBuf();
+    self.app.cancelAction();
+
+    var print_buf: [256]u8 = undefined;
+    const str = try std.fmt.bufPrint(&print_buf, "{}", .{bytes});
+    // horribly build the success message
+    const success: []const u8 = try std.mem.concat(alloc, u8, &[_][]const u8{
+        "\"",
+        rel_path[1..],
+        std.fs.path.sep_str,
+        buf.getName(),
+        "\", ",
+        str,
+        "B written",
+    });
+
+    if (self.win) |win| {
+        try self.info_column.setValue(win, success);
     }
 }
 
@@ -193,6 +248,11 @@ fn getModeStr(self: StatusBar, alloc: std.mem.Allocator) ![]const u8 {
     return s;
 }
 
+pub fn reset(self: *StatusBar) void {
+    self.app.mode = .normal;
+    self.info_column.clear();
+}
+
 pub fn focus(self: *StatusBar) void {
     self.app.mode = .command;
     self.info_column.clear();
@@ -200,8 +260,7 @@ pub fn focus(self: *StatusBar) void {
 }
 
 pub fn blur(self: *StatusBar) void {
-    self.app.mode = .normal;
-    self.info_column.clear();
+    self.reset();
     self.cell.blur();
 }
 

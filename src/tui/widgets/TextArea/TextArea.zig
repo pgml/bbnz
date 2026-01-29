@@ -189,6 +189,29 @@ pub fn openBuf(self: *TextArea, path: []const u8) !void {
     }
 }
 
+/// Saves the current buffer content to file.
+pub fn writeBuf(self: *TextArea) !usize {
+    const buf: *Buffer = self.curBuf();
+    const file = std.fs.createFileAbsolute(
+        self.curBuf().path,
+        .{ .truncate = true },
+    ) catch |e| {
+        std.log.debug("{}", .{e});
+        return 0;
+    };
+    defer file.close();
+
+    const content = try buf.getString(null);
+    const write_buf: []u8 = try self.alloc.alloc(u8, content.len);
+    defer self.alloc.free(write_buf);
+
+    var writer = file.writer(write_buf);
+    const bytes = try writer.interface.write(content);
+    try writer.interface.flush();
+
+    return bytes;
+}
+
 /// Attempts to find a buffer with the given `path`.
 /// If none could be found it returns `null`.
 pub fn findBuf(self: TextArea, path: []const u8) ?*Buffer {

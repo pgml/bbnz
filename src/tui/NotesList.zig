@@ -16,6 +16,8 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
+name: []const u8 = "",
+
 /// The layout cell/column
 cell: *Cell,
 
@@ -75,6 +77,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
     self.* = .{
         .alloc = alloc,
         .app = app,
+        .name = title,
         .cell = try .init(alloc),
         .scroll_view = .{},
     };
@@ -88,35 +91,13 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
 pub fn update(self: *NotesList, event: App.Event) !void {
     switch (event) {
         .key_press => |key| {
+            _ = key;
             if (!self.cell.isFocused()) {
                 return;
-            }
-
-            // this is all temporary
-            switch (key.codepoint) {
-                'j' => self.selected_index += 1,
-                'k' => self.selected_index -= 1,
-                vx.Key.enter => {
-                    if (self.selectedNote()) |note| {
-                        try self.app.editor.openBuf(note.data.path);
-                        try self.app.config.meta_infos.setValue(
-                            .last_open_note,
-                            note.data.path,
-                        );
-                        try self.app.config.meta_infos.write();
-                    }
-                },
-                else => {},
             }
         },
         else => {},
     }
-
-    var list_len = self.note_items.items.len;
-    if (list_len > 0) {
-        list_len -= 1;
-    }
-    self.selected_index = std.math.clamp(self.selected_index, 0, list_len);
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
@@ -240,6 +221,51 @@ pub fn blur(self: *NotesList) void {
 
 pub fn setFocus(self: *NotesList, f: bool) void {
     self.cell.setFocus(f);
+}
+
+pub fn cmdLineDown(self: *NotesList) void {
+    self.selected_index += 1;
+    self.clampIndex();
+}
+
+pub fn cmdLineUp(self: *NotesList) void {
+    self.selected_index -= 1;
+    self.clampIndex();
+}
+
+pub fn cmdSelectNote(self: *NotesList) void {
+    if (self.selectedNote()) |note| {
+        self.app.editor.openBuf(note.data.path) catch return;
+        self.app.config.meta_infos.setValue(
+            .last_open_note,
+            note.data.path,
+        ) catch return;
+        self.app.config.meta_infos.write() catch return;
+    }
+}
+
+pub fn cmdGoToTop(self: *NotesList) void {
+    self.selected_index = 0;
+}
+
+pub fn cmdGoToBottom(self: *NotesList) void {
+    self.selected_index = @intCast(self.listLen());
+}
+
+fn clampIndex(self: *NotesList) void {
+    self.selected_index = std.math.clamp(
+        self.selected_index,
+        0,
+        self.listLen(),
+    );
+}
+
+fn listLen(self: NotesList) usize {
+    var list_len = self.note_items.items.len;
+    if (list_len > 0) {
+        list_len -= 1;
+    }
+    return list_len;
 }
 
 fn freeNotes(self: *NotesList) void {

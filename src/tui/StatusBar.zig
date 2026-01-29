@@ -51,6 +51,15 @@ const InfoColumn = struct {
         self.col += 1;
     }
 
+    /// Removes the last character
+    pub fn deleteCharBefore(self: *InfoColumn) void {
+        if (self.col > 0) {
+            _ = self.value.orderedRemove(@intCast(self.col - 1));
+            self.value.shrinkAndFree(self.alloc, self.value.items.len);
+            self.col -= 1;
+        }
+    }
+
     pub fn getValue(self: InfoColumn) []vx.Cell.Character {
         return self.value.items;
     }
@@ -75,7 +84,7 @@ const InfoColumn = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator, app: *App) !*StatusBar {
+pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*StatusBar {
     const self = try alloc.create(StatusBar);
 
     self.* = .{
@@ -86,6 +95,7 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !*StatusBar {
     };
 
     self.cell.setHeight(self.default_height);
+    self.cell.title = title;
     self.info_column.cell.setOffsetX(self.cell.offset_x);
 
     return self;

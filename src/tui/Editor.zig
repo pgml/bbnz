@@ -17,6 +17,8 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
+name: []const u8,
+
 cell: *Cell,
 
 default_width: u16 = 0,
@@ -33,6 +35,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
     self.* = .{
         .alloc = alloc,
         .app = app,
+        .name = title,
         .cell = try .init(alloc),
         .textarea = try .init(alloc, app),
         .scroll_view = .{},

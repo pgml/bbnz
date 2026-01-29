@@ -17,6 +17,8 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
+name: []const u8 = "",
+
 /// The layout cell/column
 cell: *Cell,
 
@@ -90,6 +92,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryT
     self.* = .{
         .alloc = alloc,
         .app = app,
+        .name = title,
         .cell = try .init(alloc),
         .scroll_view = .{},
     };
@@ -109,45 +112,10 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
 
     switch (event) {
         .key_press => |key| {
+            _ = key;
             // this is all temporary..
             if (!self.cell.isFocused()) {
                 return;
-            }
-            if (key.matches('j', .{})) {
-                self.selected_index += 1;
-                try self.app.config.meta_infos.setValue(
-                    .last_directory,
-                    self.selectedDir().data.path,
-                );
-                try self.app.config.meta_infos.write();
-            }
-            if (key.matches('k', .{})) {
-                self.selected_index -= 1;
-                try self.app.config.meta_infos.setValue(
-                    .last_directory,
-                    self.selectedDir().data.path,
-                );
-                try self.app.config.meta_infos.write();
-            }
-            if (key.matches('h', .{ .ctrl = false })) {
-                try self.collapseTreeItem(@intCast(self.selected_index));
-                const item = self.getTreeItem(@intCast(self.selected_index));
-                try self.app.config.meta_infos.addFileInfo(item);
-                try self.app.config.meta_infos.write();
-            }
-            if (key.matches('l', .{ .ctrl = false })) {
-                try self.expandDirItem(@intCast(self.selected_index));
-                const item = self.getTreeItem(@intCast(self.selected_index));
-                try self.app.config.meta_infos.addFileInfo(item);
-                try self.app.config.meta_infos.write();
-            }
-
-            switch (key.codepoint) {
-                vx.Key.enter => {
-                    const selected_dir = self.selectedDir();
-                    try self.app.notes_list.getNotes(selected_dir.data.path);
-                },
-                else => {},
             }
         },
         else => {},
@@ -360,7 +328,6 @@ pub fn getIndexByPath(self: DirectoryTree, path: []const u8) usize {
     var i: usize = 0;
     // @todo iterate through child directories as well
     for (self.tree_items.items) |item| {
-        std.log.debug("{s} {s}", .{ item.data.path, path });
         if (utils.strEql(item.data.path, path)) {
             return i;
         }
@@ -383,6 +350,69 @@ pub fn blur(self: *DirectoryTree) void {
 
 pub fn setFocus(self: *DirectoryTree, f: bool) void {
     self.cell.setFocus(f);
+}
+
+pub fn cmdLineDown(self: *DirectoryTree) void {
+    self.selected_index += 1;
+    self.clampIndex();
+    self.updateLastDir();
+}
+
+pub fn cmdLineUp(self: *DirectoryTree) void {
+    self.selected_index -= 1;
+    self.clampIndex();
+    self.updateLastDir();
+}
+
+pub fn cmdExpand(self: *DirectoryTree) void {
+    self.expandDirItem(@intCast(self.selected_index)) catch return;
+    const item = self.getTreeItem(@intCast(self.selected_index));
+    self.app.config.meta_infos.addFileInfo(item) catch return;
+    self.app.config.meta_infos.write() catch return;
+}
+
+pub fn cmdCollapse(self: *DirectoryTree) void {
+    self.collapseTreeItem(@intCast(self.selected_index)) catch return;
+    const item = self.getTreeItem(@intCast(self.selected_index));
+    self.app.config.meta_infos.addFileInfo(item) catch return;
+    self.app.config.meta_infos.write() catch return;
+}
+
+pub fn cmdSelectDir(self: *DirectoryTree) void {
+    const selected_dir = self.selectedDir();
+    self.app.notes_list.getNotes(selected_dir.data.path) catch return;
+}
+
+pub fn cmdGoToTop(self: *DirectoryTree) void {
+    self.selected_index = 0;
+}
+
+pub fn cmdGoToBottom(self: *DirectoryTree) void {
+    self.selected_index = @intCast(self.treeLen());
+}
+
+fn clampIndex(self: *DirectoryTree) void {
+    self.selected_index = std.math.clamp(
+        self.selected_index,
+        0,
+        self.treeLen(),
+    );
+}
+
+fn updateLastDir(self: DirectoryTree) void {
+    self.app.config.meta_infos.setValue(
+        .last_directory,
+        self.selectedDir().data.path,
+    ) catch return;
+    self.app.config.meta_infos.write() catch return;
+}
+
+fn treeLen(self: DirectoryTree) usize {
+    var tree_len = self.tree_items.items.len;
+    if (tree_len > 0) {
+        tree_len -= 1;
+    }
+    return tree_len;
 }
 
 pub fn deinit(self: *DirectoryTree) void {

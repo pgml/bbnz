@@ -6,6 +6,7 @@ const vaxis = @import("vaxis");
 const Config = @import("Config.zig");
 const DirectoryTree = @import("tui/DirectoryTree.zig");
 const Editor = @import("tui/Editor.zig");
+const Input = @import("Input.zig");
 const NotesList = @import("tui/NotesList.zig");
 const StatusBar = @import("tui/StatusBar.zig");
 const log = @import("log.zig");
@@ -13,6 +14,8 @@ const log = @import("log.zig");
 alloc: std.mem.Allocator,
 
 config: *Config,
+
+input: *Input,
 
 should_quit: bool,
 
@@ -48,6 +51,7 @@ pub fn init(alloc: std.mem.Allocator) !App {
     return .{
         .alloc = alloc,
         .config = try .init(alloc),
+        .input = try .init(alloc),
         .tty = try vaxis.Tty.init(&buffer),
         .vx = try vaxis.init(alloc, .{}),
         .should_quit = false,
@@ -75,11 +79,12 @@ pub fn run(self: *App) !void {
     self.directory_tree = try .init(self.alloc, "Folders", self);
     self.notes_list = try .init(self.alloc, "Notes", self);
     self.editor = try .init(self.alloc, "Editor", self);
-    self.status_bar = try .init(self.alloc, self);
+    self.status_bar = try .init(self.alloc, "StatusBar", self);
 
     try writer.flush();
     try self.vx.queryTerminal(self.tty.writer(), 1 * std.time.ns_per_s);
 
+    self.input.app = self;
     try self.directory_tree.run();
     try self.restoreState();
 
@@ -113,40 +118,7 @@ pub fn update(self: *App, event: Event) !void {
 
     switch (event) {
         .key_press => |key| {
-            // TEMPORARY .. use input map for this
-            if (key.matches('l', .{ .ctrl = true })) {
-                self.focusNextColumn(true);
-                self.config.meta_infos.current_column = self.current_column;
-                try self.config.meta_infos.setValue(
-                    .current_column,
-                    self.current_column,
-                );
-                try self.config.meta_infos.write();
-            }
-
-            if (key.matches('h', .{ .ctrl = true })) {
-                self.focusPrevColumn(true);
-                self.config.meta_infos.current_column = self.current_column;
-                try self.config.meta_infos.setValue(
-                    .current_column,
-                    self.current_column,
-                );
-                try self.config.meta_infos.write();
-            }
-
-            if (key.matches(':', .{})) {
-                self.last_column = self.current_column;
-                // unfocus all colums by setting index to 0
-                self.focusColumn(0);
-                self.status_bar.focus();
-            }
-
-            if (key.matches(vaxis.Key.escape, .{})) {
-                if (self.mode == .command) {
-                    self.focusColumn(self.last_column);
-                    self.status_bar.blur();
-                }
-            }
+            try self.input.handleSeq(key);
         },
         .winsize => |ws| {
             try self.vx.resize(self.alloc, self.tty.writer(), ws);
@@ -230,8 +202,51 @@ pub fn focusPrevColumn(self: *App, cycle: bool) void {
     return self.focusColumn(column);
 }
 
+pub fn focusedColumnName(self: App) []const u8 {
+    return switch (self.current_column) {
+        0 => self.status_bar.cell.title,
+        1 => self.directory_tree.name,
+        2 => self.notes_list.name,
+        3 => self.editor.name,
+        else => "",
+    };
+}
+
+pub fn cmdNextCol(self: *App) void {
+    self.focusNextColumn(true);
+    self.saveColToConf() catch return;
+}
+
+pub fn cmdPrevCol(self: *App) void {
+    self.focusPrevColumn(true);
+    self.saveColToConf() catch return;
+}
+
+fn saveColToConf(self: *App) !void {
+    self.config.meta_infos.current_column = self.current_column;
+    try self.config.meta_infos.setValue(
+        .current_column,
+        self.current_column,
+    );
+    try self.config.meta_infos.write();
+}
+
 pub fn setMode(self: *App, mode: Editor.TextArea.Vim.Mode) void {
     self.mode = mode;
+
+    if (mode == .command) {
+        self.last_column = self.current_column;
+        // unfocus all colums by setting index to 0
+        self.focusColumn(0);
+        self.status_bar.focus();
+    }
+}
+
+pub fn cancelAction(self: *App) void {
+    if (self.mode == .command) {
+        self.focusColumn(self.last_column);
+        self.status_bar.blur();
+    }
 }
 
 pub fn quit(self: *App) !void {
@@ -242,6 +257,9 @@ pub fn quit(self: *App) !void {
 pub fn deinit(self: *App) void {
     self.config.deinit();
     self.alloc.destroy(self.config);
+
+    self.input.deinit();
+    self.alloc.destroy(self.input);
 
     self.directory_tree.deinit();
     self.alloc.destroy(self.directory_tree);

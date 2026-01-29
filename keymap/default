@@ -1,0 +1,198 @@
+# —————————————————————————————————————————————————————————————————————————————
+# Global commands available across all components
+# —————————————————————————————————————————————————————————————————————————————
+mode normal {
+    bind ":"          fn: cmd
+    bind "enter"      fn: confirmAction
+    bind "esc"        fn: cancelAction
+    bind "gg"         fn: goToTop
+    bind "G"          fn: goToBottom
+    bind "C-w l"      fn: focusNextColumn
+    bind "C-w C-l"    fn: focusNextColumn
+    bind "C-w h"      fn: focusPrevColumn
+    bind "C-w C-h"    fn: focusPrevColumn
+    bind "space e"    fn: showBufferList
+    bind "space q"    fn: closeNote              #todo
+    bind "space u"    fn: reopenLastClosedNote   #todo
+    bind "space n"    fn: newScratch             #todo
+}
+
+mode command {
+    bind "enter"    fn: confirmAction
+    bind "esc"      fn: cancelAction
+    bind "up"       fn: historyBack    #todo
+    bind "down"     fn: historyForward #todo
+}
+
+mode insert {
+    bind "esc"    fn: cancelAction
+}
+
+mode search {
+    bind "enter"    fn: confirmAction         #todo
+    bind "esc"      fn: cancelAction          #todo
+    bind "C-c"      fn: cancelAction          #todo
+    bind "up"       fn: searchHistoryBack     #todo
+    bind "down"     fn: searchHistoryForward  #todo
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Commands available for folders and notes
+# —————————————————————————————————————————————————————————————————————————————
+mode normal(Folders, Notes) {
+    bind "j"     fn: lineDown
+    bind "k"     fn: lineUp
+    bind "R"     fn: renameListItem       #todo
+    bind "D"     fn: delListItem          #todo
+    bind "P"     fn: togglePinListItem    #todo
+    bind "yy"    fn: yankListItem         #todo
+    bind "dd"    fn: cutListItem          #todo
+    bind "p"     fn: pasteListItem        #todo
+    bind "r"     fn: refreshList          #todo
+}
+
+mode insert(Folders, Notes) {
+    bind "enter"    fn: confirmAction  #todo
+    bind "esc"      fn: cancelAction   #todo
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Buffer list commands
+# —————————————————————————————————————————————————————————————————————————————
+mode normal(BufferList) {
+    bind "esc"    fn: closeBufferList #todo
+    bind "D"      fn: closeNote       #todo
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Folder commands
+# —————————————————————————————————————————————————————————————————————————————
+mode normal(Folders) {
+    bind "l"    fn: treeExpand
+    bind "h"    fn: treeCollapse
+    bind "d"    fn: createFolder  #todo
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Command mode keybinds
+# —————————————————————————————————————————————————————————————————————————————
+mode command {
+    bind "backspace"    fn: statusbar.deleteBefore
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Notes commands
+# —————————————————————————————————————————————————————————————————————————————
+mode normal(Notes) {
+    bind "%"    fn: createNote   #todo
+}
+
+# —————————————————————————————————————————————————————————————————————————————
+# Editor commands
+# —————————————————————————————————————————————————————————————————————————————
+# Shared editor commands in all modes
+
+mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
+    bind "0"     fn: editor.lineStart
+    bind "^"     fn: editor.lineStart    flags: [non_white]
+    bind "_"     fn: editor.lineStart    flags: [non_white]
+    bind "$"     fn: editor.lineEnd
+
+    bind "F"     fn: editor.findChar     flags: [op, await, prev]  #todo
+    bind "G"     fn: editor.goToBottom
+    bind "J"     fn: editor.mergeLines
+
+    bind "b"     fn: editor.prevWord
+    bind "e"     fn: editor.nextWord     flags: [end]
+    bind "f"     fn: editor.findChar     flags: [op, await]        #todo
+    bind "h"     fn: editor.charLeft
+    bind "j"     fn: editor.lineDown
+    bind "k"     fn: editor.lineUp
+    bind "l"     fn: editor.charRight
+    bind "v"     fn: editor.toggleVisual                           #todo
+    bind "V"     fn: editor.toggleVisualLine                       #todo
+    bind "w"     fn: editor.nextWord
+    bind "s"     fn: editor.substituteText                         #todo
+    bind "x"     fn: editor.delChar
+    bind "p"     fn: editor.paste                                  #todo
+
+    bind "ge"    fn: editor.prevWord     flags: [end]
+    bind "gj"    fn: editor.lineDown     flags: [multiline]        #todo
+    bind "gk"    fn: editor.lineUp       flags: [multiline]        #todo
+    bind "gg"    fn: editor.goToTop
+
+    bind "C-d"   fn: editor.halfPageDown
+    bind "C-u"   fn: editor.halfPageUp
+    bind "esc"   fn: editor.cancelAction
+}
+
+# normal mode editor commands
+mode normal(Editor) {
+    bind "/"     fn: editor.find                                      #todo
+    bind "*"     fn: editor.findWordUnderCursor                       #todo
+
+    bind "A"     fn: editor.insertAfterLine
+    bind "C"     fn: editor.changeAfterCursor
+    bind "D"     fn: editor.deleteAfterCursor
+    bind "I"     fn: editor.insertBeforeLine
+    bind "N"     fn: editor.moveToMatch       flags: [prev]           #todo
+    bind "O"     fn: editor.insertAbove
+
+    bind "a"     fn: editor.insertAfter
+    bind "i"     fn: editor.insertBefore
+    bind "n"     fn: editor.moveToMatch                               #todo
+    bind "u"     fn: editor.undo
+    bind "r"     fn: editor.replace                                   #todo
+    bind "o"     fn: editor.insertBelow
+
+    bind "cc"    fn: editor.changeLine
+    bind "dd"    fn: editor.deleteLine
+    bind "df"    fn: editor.deleteCurToChar  flags: [op, await, incl]  #todo
+    bind "dw"    fn: editor.deleteWord       flags: [remaining]       #todo
+    bind "daw"   fn: editor.deleteWord       flags: [outer]           #todo
+    bind "diw"   fn: editor.deleteWord                                #todo
+
+    bind "C-r"   fn: editor.redo
+}
+
+# insert mode editor commands
+mode insert(Editor) {
+    bind "esc"         fn: editor.enterNormalMode
+    bind "enter"       fn: editor.newLine
+    bind "backspace"   fn: editor.deleteCharBefore
+    bind "delete"      fn: editor.deleteCharAfter
+    bind "tab"         fn: editor.insertTabChar
+}
+
+
+
+# under construction ————————————————————————————————
+#bind "dF"    fn: delCurToChar(op=true, await=true, incl=true, prev=true)  mode: normal   components: [Editor] #todo
+#bind "dt"    fn: delCurToChar(op=true, await=true)              mode: normal   components: [Editor] #todo
+#bind "dT"    fn: delCurToChar(op=true, await=true, prev=true)   mode: normal   components: [Editor] #todo
+#bind "cw"    fn: changeWord(remaining=true)    mode: normal   components: [Editor] #todo
+#bind "ciw"   fn: changeWord(outer=false)       mode: normal   components: [Editor] #todo
+#bind "caw"   fn: changeWord(outer=true)        mode: normal   components: [Editor] #todo
+#bind "cf"    fn: delCurToChar(op=true, await=true, ins=true, incl=true)             mode: normal   components: [Editor] #todo
+#bind "cF"    fn: delCurToChar(op=true, await=true, ins=true, incl=true, prev=true)  mode: normal   components: [Editor] #todo
+#bind "ct"    fn: delCurToChar(op=true, await=true, ins=true)             mode: normal   components: [Editor] #todo
+#bind "cT"    fn: delCurToChar(op=true, await=true, ins=true, prev=true)  mode: normal   components: [Editor] #todo
+#bind "Y"     fn: yankAfterCursor         mode: normal   components: [Editor] #todo
+#bind "yy"    fn: yankLine                mode: normal   components: [Editor] #todo
+#bind "yiw"   fn: yankWord(outer=false)   mode: normal   components: [Editor] #todo
+#bind "yaw"   fn: yankWord(outer=true)    mode: normal   components: [Editor] #todo
+#
+#bind "iw"    fn: selectWord(outer=false)    mode: visual   components: [Editor] #todo
+#bind "aw"    fn: yankLine(outer=true)       mode: visual   components: [Editor] #todo
+#bind "d"     fn: delSelection               mode: visual   components: [Editor] #todo
+#bind "c"     fn: substituteText             mode: visual   components: [Editor] #todo
+#bind "y"     fn: yankSelection              mode: visual   components: [Editor] #todo
+#bind "u"     fn: changeToLowerCase          mode: visual   components: [Editor] #todo
+#bind "U"     fn: changeToUpperCase          mode: visual   components: [Editor] #todo
+#
+#bind "d"     fn: delSelection               mode: visual_line   components: [Editor] #todo
+#bind "D"     fn: delLine                    mode: visual_line   components: [Editor] #todo
+#bind "c"     fn: substituteText(nl=true)    mode: visual_line   components: [Editor] #todo
+#bind "y"     fn: yankSelection              mode: visual_line   components: [Editor] #todo
+#bind "u"     fn: changeToLowerCase          mode: visual_line   components: [Editor] #todo
+#bind "U"     fn: changeToUpperCase          mode: visual_line   components: [Editor] #todo

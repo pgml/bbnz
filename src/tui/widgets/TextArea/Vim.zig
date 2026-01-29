@@ -304,10 +304,6 @@ pub fn setMode(self: *Vim, mode: Mode) void {
     const textarea: *TextArea = self.textarea;
 
     switch (mode) {
-        .insert => {
-            textarea.newHistoryEntry();
-            self.textarea.app.mode = .insert;
-        },
         .normal => {
             const last_hash = Buffer.fastHash(textarea.prev_value);
             const buf_hash = buf.getHash() catch return;
@@ -320,14 +316,53 @@ pub fn setMode(self: *Vim, mode: Mode) void {
 
             const meta = textarea.app.config.meta_infos;
             meta.updateFileInfo(buf.path, .cursor_pos, buf.cursor_pos) catch return;
-            self.textarea.app.mode = .normal;
+            textarea.app.mode = .normal;
+            textarea.selection = null;
+        },
+        .insert => {
+            textarea.newHistoryEntry();
+            textarea.app.mode = .insert;
+        },
+        .visual => {
+            textarea.app.mode = .visual;
+        },
+        .visual_line => {
+            textarea.app.mode = .visual_line;
         },
         else => {},
+    }
+
+    if (mode == .visual_line or mode == .visual) {
+        if (textarea.selection == null) {
+            textarea.selection = .init(mode);
+            textarea.selection.?.setStart(buf.cursor_pos);
+        }
     }
 }
 
 pub fn resetSeq(self: *Vim) void {
     self.current_op = 0;
+}
+
+pub fn visual(self: *Vim, flags: ?Input.Flags) void {
+    var line = false;
+    if (flags) |f| {
+        line = Input.flagsContain(f, .line);
+    }
+
+    if (line) {
+        if (self.mode == .normal or self.mode == .visual) {
+            self.setMode(.visual_line);
+        } else {
+            self.setMode(.normal);
+        }
+    } else {
+        if (self.mode == .normal or self.mode == .visual_line) {
+            self.setMode(.visual);
+        } else {
+            self.setMode(.normal);
+        }
+    }
 }
 
 /// Handle "i", "I", "a" and "A" commands.
@@ -537,7 +572,6 @@ pub fn esc(self: *Vim, flags: ?Input.Flags) void {
     _ = flags;
     switch (self.mode) {
         .insert => {
-            self.setMode(.normal);
             self.textarea.characterLeft();
         },
         .normal => {
@@ -546,7 +580,10 @@ pub fn esc(self: *Vim, flags: ?Input.Flags) void {
         else => {},
     }
 
-    self.textarea.app.mode = .normal;
+    if (self.mode != .normal) {
+        self.setMode(.normal);
+        self.textarea.app.mode = .normal;
+    }
 
     if (self.textarea.win) |win| {
         win.screen.cursor_shape = .block;

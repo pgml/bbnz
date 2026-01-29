@@ -38,6 +38,7 @@ pub const FlagValue = enum {
     end,
     await,
     prev,
+    line,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -119,6 +120,7 @@ const fn_registry = [_]FnMap{
     //.{ .cp = Key.left,    .t_fn = ta.characterLeft },
     //.{ .cp = Key.right,   .t_fn = ta.characterRight },
     .{ .name = "editor.enterNormalMode",    .exec = .{ .vim = Vim.esc }},
+    .{ .name = "editor.toggleVisualMode",   .exec = .{ .vim = Vim.visual }},
     .{ .name = "editor.insertTabChar",      .exec = .{ .vim = Vim.tab }},
     .{ .name = "editor.deleteCharBefore",   .exec = .{ .vim = Vim.del }},
     .{ .name = "editor.deleteCharAfter",    .exec = .{ .vim = Vim.del }},
@@ -428,6 +430,7 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "end")) flag = .end;
         if (std.mem.eql(u8, flag_str, "await")) flag = .await;
         if (std.mem.eql(u8, flag_str, "prev")) flag = .prev;
+        if (std.mem.eql(u8, flag_str, "line")) flag = .line;
         return flag;
     }
 };
@@ -721,4 +724,14 @@ fn resolveMode(mode_str: []const u8) TextArea.Vim.Mode {
     if (std.mem.eql(u8, mode_str, "visual_block")) mode = .visual_block;
 
     return mode;
+}
+
+pub fn flagsContain(haystack: Flags, needle: FlagValue) bool {
+    for (haystack.items) |item| {
+        if (item == needle) {
+            return true;
+        }
+    }
+
+    return false;
 }

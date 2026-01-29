@@ -9,6 +9,7 @@ const dmp = @import("diffmatchpatch");
 pub const App = @import("../../../App.zig");
 pub const Buffer = @import("Buffer.zig");
 pub const Vim = @import("Vim.zig");
+pub const Theme = @import("../../layout/theme.zig");
 
 alloc: std.mem.Allocator,
 
@@ -37,6 +38,8 @@ vim: *Vim,
 
 use_virtual_cursor: bool = false,
 
+selection: ?Selection = null,
+
 /// Holds the previous text value of the current buffer.
 /// Currently used for storing the value before entering any vim mode
 /// that alters the text, so that we can create a reliable history.
@@ -50,6 +53,74 @@ pub const Character = struct {
     grapheme: []const u8 = " ",
     width: u8 = 1,
     is_selected: bool = false,
+};
+
+pub const Selection = struct {
+    start_pos: Buffer.CursorPos,
+
+    mode: Vim.Mode = .normal,
+
+    pub fn init(mode: Vim.Mode) Selection {
+        return .{
+            .start_pos = .{ .row = 0, .row_offset = 0, .col = 0 },
+            .mode = mode,
+        };
+    }
+
+    pub fn setStart(self: *Selection, pos: Buffer.CursorPos) void {
+        self.start_pos = pos;
+    }
+
+    pub fn isInRange(
+        self: Selection,
+        curpos: Buffer.CursorPos,
+        row_index: u16,
+        column: u16,
+    ) bool {
+        const start = self.start_pos;
+        const end = curpos;
+        const sel_start = if (isBefore(start, end)) start else end;
+        const sel_end = if (isBefore(start, end)) end else start;
+
+        var selected = false;
+
+        if (self.mode == .visual) {
+            // single row selection
+            if (sel_start.row == sel_end.row) {
+                if (row_index == sel_start.row and
+                    column >= sel_start.col and column < sel_end.col)
+                {
+                    selected = true;
+                }
+            } else {
+                // Multi row selection
+                // rows inbetween, select all
+                if (row_index > sel_start.row and
+                    row_index < sel_end.row)
+                {
+                    selected = true;
+                }
+                // upper selection row, start col to end of row
+                else if (row_index == sel_start.row and
+                    column >= sel_start.col)
+                {
+                    selected = true;
+                }
+                // last selection row, col 0 to end of row
+                else if (row_index == sel_end.row and
+                    column < sel_end.col)
+                {
+                    selected = true;
+                }
+            }
+        } else if (self.mode == .visual_line) {
+            if (row_index >= sel_start.row and row_index <= sel_end.row) {
+                selected = true;
+            }
+        }
+
+        return selected;
+    }
 };
 
 pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
@@ -115,8 +186,6 @@ pub fn draw(self: *TextArea) !void {
     var i: usize = 0;
 
     for (buf.rows.items) |row| {
-        defer i += 1;
-
         const row_index: u16 = @intCast(i);
         var col: u16 = 0;
 
@@ -133,13 +202,31 @@ pub fn draw(self: *TextArea) !void {
                     style.fg = .{ .rgb = self.vim.mode.fgColor() };
                 }
 
+                if (self.selection) |*selection| {
+                    selection.mode = self.app.mode;
+                    if (selection.isInRange(buf.cursor_pos, row_index, col)) {
+                        style.bg = Theme.Color.Selection.bg;
+                    }
+                }
+
                 view.writeCell(win, col, row_index, .{
                     .char = .{ .grapheme = g, .width = char.width },
                     .style = style,
                 });
+
                 style = .{};
             }
             col += 1;
+        }
+
+        // select an invisible, temporary character on empty rows
+        if (row.len() == 0 and self.selection != null) {
+            if (self.selection.?.isInRange(buf.cursor_pos, row_index, col)) {
+                view.writeCell(win, col, row_index, .{
+                    .char = .{ .grapheme = " ", .width = 1 },
+                    .style = .{ .bg = Theme.Color.Selection.bg },
+                });
+            }
         }
 
         // Do cursor stuff only on current row
@@ -147,13 +234,16 @@ pub fn draw(self: *TextArea) !void {
             if (self.use_virtual_cursor or !self.is_focucsed) {
                 win.hideCursor();
             } else {
-                win.showCursor(
-                    @intCast(buf.col),
-                    @intCast(self.getTermRow()),
-                );
+                win.showCursor(@intCast(buf.col), @intCast(self.getTermRow()));
             }
         }
+
+        i += 1;
     }
+}
+
+fn isBefore(a: Buffer.CursorPos, b: Buffer.CursorPos) bool {
+    return a.row < b.row or (a.row == b.row and a.col < b.col);
 }
 
 pub fn newBuf(self: *TextArea, path: []const u8) !void {

@@ -15,6 +15,10 @@ pub const Color = struct {
     pub const LineNumber = struct {
         pub const fg: vx.Color = .{ .rgb = .{ 110, 110, 110 } };
     };
+
+    pub const Selection = struct {
+        pub const bg: vx.Color = .{ .rgb = .{ 68, 76, 85 } };
+    };
 };
 
 pub const border_T = [6][]const u8;

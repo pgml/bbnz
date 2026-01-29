@@ -19,6 +19,8 @@ alloc: std.mem.Allocator,
 meta_infos: *MetaInfos,
 
 pub const MetaInfos = struct {
+    arena: std.heap.ArenaAllocator,
+
     alloc: std.mem.Allocator,
 
     /// The path of the meta info file.
@@ -76,7 +78,10 @@ pub const MetaInfos = struct {
 
     pub fn init(alloc: std.mem.Allocator) !*MetaInfos {
         const self = try alloc.create(MetaInfos);
-        self.* = .{ .alloc = alloc };
+        self.* = .{
+            .arena = .init(alloc),
+            .alloc = self.arena.allocator(),
+        };
         return self;
     }
 
@@ -279,14 +284,7 @@ pub const MetaInfos = struct {
     }
 
     pub fn deinit(self: *MetaInfos) void {
-        self.alloc.free(self.last_directory);
-        self.alloc.free(self.last_open_note);
-        var iter = self.files_info.iterator();
-        while (iter.next()) |entry| {
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.files_info.deinit();
-        self.alloc.free(self.file_path);
+        self.arena.deinit();
     }
 };
 

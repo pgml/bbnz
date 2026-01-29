@@ -445,7 +445,7 @@ pub fn del(self: *Vim, flags: ?Input.Flags) void {
         Key.backspace => {
             self.textarea.newHistoryEntry();
             const buf = self.textarea.curBuf();
-            const col = if (buf.col > 0) buf.col - 1 else buf.col;
+            const col = if (buf.col > 0) buf.col - 1 else return;
             if (self.textarea.deleteCharAt(col)) {
                 self.textarea.updateHistoryEntry() catch return;
             }

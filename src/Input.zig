@@ -392,13 +392,14 @@ const KeyMap = struct {
         var comp_iter = std.mem.splitAny(u8, comp_slice, ",");
         while (comp_iter.next()) |c| {
             const comp = std.mem.trim(u8, c, " \t");
+            const comp_dup = try self.alloc.dupe(u8, comp);
 
             if (std.mem.eql(u8, comp, "all")) {
                 try self.fillAllComponents(mode, scoped_targets);
             } else {
                 try scoped_targets.append(
                     self.alloc,
-                    .{ .mode = mode, .component = comp },
+                    .{ .mode = mode, .component = comp_dup },
                 );
             }
         }

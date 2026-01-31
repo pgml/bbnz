@@ -147,9 +147,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*StatusBar 
 }
 
 pub fn setupColumns(self: *StatusBar) !void {
-    var gen: *Column = try .init(self.alloc);
-    gen.col = 1;
-
+    const gen: *Column = try .init(self.alloc);
     try self.colums.put(.general, gen);
 }
 

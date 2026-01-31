@@ -502,7 +502,7 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
 
     var key_text = key.text orelse return;
 
-    if (self.app.mode != .insert) {
+    if (self.app.mode != .insert and self.app.mode != .command) {
         // look for current key sequence keys and build a correct
         // string rep of the keybind that matches the one from the keymap file
         for (self.cur_seq.items) |seq| {

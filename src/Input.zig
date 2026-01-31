@@ -711,8 +711,9 @@ fn closeNote(self: *Input, flags: ?Flags) void {
 
 fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
     _ = flags;
-    const statusbar = self.app.status_bar;
-    statusbar.general_info_column.deleteCharBefore();
+    if (self.app.status_bar.colums.getEntry(.general)) |entry| {
+        entry.value_ptr.*.deleteCharBefore();
+    }
 }
 
 fn yank(self: *Input, flags: ?Flags) void {

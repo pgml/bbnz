@@ -39,10 +39,16 @@ mode: Editor.TextArea.Vim.Mode = .normal,
 
 win: vaxis.Window = undefined,
 
+loop: vaxis.Loop(Event) = undefined,
+
 pub const Event = union(enum) {
     key_press: vaxis.Key,
     key_release: vaxis.Key,
     winsize: vaxis.Winsize,
+    update_statusbar: struct {
+        col: StatusBar.ColumnPos,
+        text: []const u8,
+    },
 };
 
 pub fn init(alloc: std.mem.Allocator) !App {
@@ -65,14 +71,14 @@ pub fn init(alloc: std.mem.Allocator) !App {
 pub fn run(self: *App) !void {
     const writer: *std.Io.Writer = self.tty.writer();
 
-    var loop: vaxis.Loop(Event) = .{
+    self.loop = .{
         .vaxis = &self.vx,
         .tty = &self.tty,
     };
-    try loop.init();
+    try self.loop.init();
 
-    try loop.start();
-    defer loop.stop();
+    try self.loop.start();
+    defer self.loop.stop();
 
     try self.vx.enterAltScreen(writer);
 
@@ -89,18 +95,8 @@ pub fn run(self: *App) !void {
     try self.restoreState();
 
     while (!self.should_quit) {
-        const event: Event = loop.nextEvent();
+        const event: Event = self.loop.nextEvent();
         try self.update(event);
-
-        switch (event) {
-            .key_press => |key| {
-                _ = key;
-            },
-            .winsize => |ws| {
-                try self.vx.resize(self.alloc, self.tty.writer(), ws);
-            },
-            else => {},
-        }
 
         try self.draw();
 

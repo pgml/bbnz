@@ -39,6 +39,7 @@ pub const FlagValue = enum {
     await,
     prev,
     line,
+    from_cursor,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -115,6 +116,7 @@ const fn_registry = [_]FnMap{
     .{ .name = "editor.undo",          .exec = .{ .textarea = TextArea.undo }},
     .{ .name = "editor.delChar",       .exec = .{ .vim = Vim.del }},
     .{ .name = "editor.newLine",       .exec = .{ .vim = Vim.newLine }},
+    .{ .name = "editor.yank",          .exec = .{ .input = yank }},
     //.{ .cp = Key.enter,   .v_fn = newLine },
     //.{ .cp = Key.up,      .v_fn = up },
     //.{ .cp = Key.down,    .v_fn = down },
@@ -432,6 +434,7 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "await")) flag = .await;
         if (std.mem.eql(u8, flag_str, "prev")) flag = .prev;
         if (std.mem.eql(u8, flag_str, "line")) flag = .line;
+        if (std.mem.eql(u8, flag_str, "from_cursor")) flag = .from_cursor;
         return flag;
     }
 };
@@ -710,6 +713,24 @@ fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
     _ = flags;
     const statusbar = self.app.status_bar;
     statusbar.general_info_column.deleteCharBefore();
+}
+
+fn yank(self: *Input, flags: ?Flags) void {
+    var line = false;
+    var from_cursor = false;
+    var ta = self.app.editor.textarea;
+    //const buf = ta.curBuf();
+
+    if (flags) |f| {
+        line = Input.flagsContain(f, .line);
+        from_cursor = Input.flagsContain(f, .from_cursor);
+    }
+
+    if (from_cursor) {
+        // @todo
+    } else {
+        ta.yankSelection(false) catch return;
+    }
 }
 
 pub fn deinit(self: *Input) void {

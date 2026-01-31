@@ -58,29 +58,35 @@ pub const Character = struct {
 pub const Selection = struct {
     start_pos: Buffer.CursorPos,
 
+    cur_pos: Buffer.CursorPos,
+
     mode: Vim.Mode = .normal,
 
-    pub fn init(mode: Vim.Mode) Selection {
+    pub fn init(mode: Vim.Mode, start_pos: Buffer.CursorPos) Selection {
         return .{
-            .start_pos = .{ .row = 0, .row_offset = 0, .col = 0 },
+            .start_pos = start_pos,
+            .cur_pos = .{ .row = 0, .row_offset = 0, .col = 0 },
             .mode = mode,
         };
     }
 
-    pub fn setStart(self: *Selection, pos: Buffer.CursorPos) void {
-        self.start_pos = pos;
+    pub fn getStart(self: Selection) Buffer.CursorPos {
+        if (isBefore(self.start_pos, self.cur_pos)) {
+            return self.start_pos;
+        }
+        return self.cur_pos;
     }
 
-    pub fn isInRange(
-        self: Selection,
-        curpos: Buffer.CursorPos,
-        row_index: u16,
-        column: u16,
-    ) bool {
-        const start = self.start_pos;
-        const end = curpos;
-        const sel_start = if (isBefore(start, end)) start else end;
-        const sel_end = if (isBefore(start, end)) end else start;
+    pub fn getEnd(self: Selection) Buffer.CursorPos {
+        if (isBefore(self.start_pos, self.cur_pos)) {
+            return self.cur_pos;
+        }
+        return self.start_pos;
+    }
+
+    pub fn isInRange(self: Selection, row_index: u16, column: u16) bool {
+        const sel_start = self.getStart();
+        const sel_end = self.getEnd();
 
         var selected = false;
 
@@ -88,7 +94,7 @@ pub const Selection = struct {
             // single row selection
             if (sel_start.row == sel_end.row) {
                 if (row_index == sel_start.row and
-                    column >= sel_start.col and column < sel_end.col)
+                    column >= sel_start.col and column <= sel_end.col)
                 {
                     selected = true;
                 }
@@ -108,7 +114,7 @@ pub const Selection = struct {
                 }
                 // last selection row, col 0 to end of row
                 else if (row_index == sel_end.row and
-                    column < sel_end.col)
+                    column <= sel_end.col)
                 {
                     selected = true;
                 }
@@ -204,7 +210,8 @@ pub fn draw(self: *TextArea) !void {
 
                 if (self.selection) |*selection| {
                     selection.mode = self.app.mode;
-                    if (selection.isInRange(buf.cursor_pos, row_index, col)) {
+                    selection.cur_pos = buf.cursor_pos;
+                    if (selection.isInRange(row_index, col)) {
                         style.bg = Theme.Color.Selection.bg;
                     }
                 }
@@ -221,7 +228,7 @@ pub fn draw(self: *TextArea) !void {
 
         // select an invisible, temporary character on empty rows
         if (row.len() == 0 and self.selection != null) {
-            if (self.selection.?.isInRange(buf.cursor_pos, row_index, col)) {
+            if (self.selection.?.isInRange(row_index, col)) {
                 view.writeCell(win, col, row_index, .{
                     .char = .{ .grapheme = " ", .width = 1 },
                     .style = .{ .bg = Theme.Color.Selection.bg },
@@ -941,6 +948,90 @@ pub fn setCursorRow(self: *TextArea, row: i32) void {
 
     buf.row = @intCast(std.math.clamp(clamped, 0, num_rows - 1));
 }
+
+/// Copies the given string to the clipboard
+pub fn yank(self: *TextArea, text: []const u8) void {
+    self.vim.setMode(.normal);
+    self.app.vx.copyToSystemClipboard(
+        self.app.tty.writer(),
+        text,
+        self.alloc,
+    ) catch |err| {
+        std.log.err("Clipboard err: {}", .{err});
+        return;
+    };
+}
+
+/// Copies the current selection to the clipboard.
+/// If `keep_cur_pos` is true the cursor position remains the same
+/// otherwise the cursor is moved to the beginning of the selection
+pub fn yankSelection(self: *TextArea, keep_cur_pos: bool) !void {
+    var arena = std.heap.ArenaAllocator.init(self.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const buf: *Buffer = self.buffers.getLast();
+    const sel: Selection = self.selection orelse return;
+
+    var selected_text: std.ArrayList([]const u8) = .empty;
+    defer selected_text.deinit(alloc);
+
+    var i: usize = 0;
+    for (buf.rows.items) |row| {
+        var col: u16 = 0;
+
+        for (row.getValue()) |*char| {
+            defer col += 1;
+            if (!sel.isInRange(@intCast(i), col)) {
+                continue;
+            }
+
+            try selected_text.append(alloc, char.grapheme);
+
+            if (col == row.len() - 1) {
+                try selected_text.append(alloc, "\n");
+            }
+        }
+        i += 1;
+    }
+
+    const text = try std.mem.join(alloc, "", selected_text.items);
+    self.yank(text);
+
+    if (!keep_cur_pos) {
+        self.moveCursorTo(sel.getStart().row, sel.getStart().col);
+        self.selection = null;
+    }
+}
+
+//func (self *Editor) YankAfterCursor() message.StatusBarMsg {
+//  self.saveCursorPos()
+//  self.Textarea.StartSelection(textarea.SelectVisual)
+//  self.GoToLineEnd()
+//
+//  return self.YankSelection(true)
+//}
+//
+//// YankLine copies the current line to the clipboard
+//func (self *Editor) YankLine() message.StatusBarMsg {
+//  self.saveCursorPos()
+//  self.EnterVisualMode(textarea.SelectVisualLine)
+//  return self.YankSelection(true)
+//}
+//
+//// YankWord copies the current word to the clipboard.
+//// If outer is set to true it copies the space after the word.
+//func (self *Editor) YankWord(outer bool) message.StatusBarMsg {
+//  self.EnterVisualMode(textarea.SelectVisual)
+//
+//  if outer {
+//      self.Textarea.SelectOuterWord()
+//  } else {
+//      self.Textarea.SelectInnerWord()
+//  }
+//
+//  return self.YankSelection(false)
+//}
 
 /// Creates a new history entry for the current Buffer
 /// saving the correct undo cursor position and current textarea content.

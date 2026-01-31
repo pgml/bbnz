@@ -200,14 +200,6 @@ pub fn update(self: *Vim, event: TextArea.Event, textarea: *TextArea) !void {
             }
         },
     }
-
-    if (self.textarea.win) |win| {
-        if (self.mode == .insert) {
-            win.screen.cursor_shape = .beam_blink;
-        } else {
-            win.screen.cursor_shape = .block;
-        }
-    }
 }
 
 //pub fn dispatchCmds(self: *Vim) void {
@@ -334,8 +326,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
 
     if (mode == .visual_line or mode == .visual) {
         if (textarea.selection == null) {
-            textarea.selection = .init(mode);
-            textarea.selection.?.setStart(buf.cursor_pos);
+            textarea.selection = .init(mode, buf.cursor_pos);
         }
     }
 }

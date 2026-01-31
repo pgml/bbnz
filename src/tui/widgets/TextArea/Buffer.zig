@@ -59,6 +59,7 @@ pub const CursorPos = struct {
     col: i32 = 0,
 };
 
+// @todo, undo and redoing patches fills memory
 pub const History = struct {
     alloc: std.mem.Allocator,
 

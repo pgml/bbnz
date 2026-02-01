@@ -39,6 +39,8 @@ pub const Column = struct {
 
     col: i16 = 0,
 
+    position: ColumnPos = .general,
+
     pub fn init(alloc: std.mem.Allocator) !*Column {
         const self = try alloc.create(Column);
 

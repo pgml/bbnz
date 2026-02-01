@@ -166,6 +166,12 @@ mode insert(Editor) {
     bind "tab"         fn: editor.insertTabChar
 }
 
+mode visual(Editor) {
+    bind "y"     fn: editor.yank
+    bind "iw"    fn: editor.select       flags: [word]
+    bind "aw"    fn: editor.select       flags: [word,outer]
+}
+
 mode visual(Editor), visual_line(Editor), visual_block(Editor) {
     bind "y"     fn: editor.yank
 }

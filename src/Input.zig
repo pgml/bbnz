@@ -40,6 +40,8 @@ pub const FlagValue = enum {
     prev,
     line,
     from_cursor,
+    word,
+    outer,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -117,6 +119,7 @@ const fn_registry = [_]FnMap{
     .{ .name = "editor.delChar",       .exec = .{ .vim = Vim.del }},
     .{ .name = "editor.newLine",       .exec = .{ .vim = Vim.newLine }},
     .{ .name = "editor.yank",          .exec = .{ .input = yank }},
+    .{ .name = "editor.select",        .exec = .{ .vim = Vim.select }},
     //.{ .cp = Key.enter,   .v_fn = newLine },
     //.{ .cp = Key.up,      .v_fn = up },
     //.{ .cp = Key.down,    .v_fn = down },
@@ -435,6 +438,8 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "prev")) flag = .prev;
         if (std.mem.eql(u8, flag_str, "line")) flag = .line;
         if (std.mem.eql(u8, flag_str, "from_cursor")) flag = .from_cursor;
+        if (std.mem.eql(u8, flag_str, "word")) flag = .word;
+        if (std.mem.eql(u8, flag_str, "outer")) flag = .outer;
         return flag;
     }
 };

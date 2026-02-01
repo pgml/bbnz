@@ -426,13 +426,8 @@ pub fn newLine(self: *Vim, flags: ?Input.Flags) void {
 pub fn beginLine(self: *Vim, flags: ?Input.Flags) void {
     var non_white = false;
 
-    if (flags) |flags_| {
-        for (flags_.items) |item| {
-            if (item == .non_white) {
-                non_white = true;
-                break;
-            }
-        }
+    if (flags) |f| {
+        non_white = Input.flagsContain(f, .non_white);
     }
 
     self.textarea.beginLine(non_white);
@@ -557,6 +552,59 @@ pub fn changeAfterCursor(self: *Vim, flags: ?Input.Flags) void {
     self.setMode(.insert);
     self.deleteAfterCursor(flags);
     self.textarea.characterRight();
+}
+
+pub fn select(self: *Vim, flags: ?Input.Flags) void {
+    var word = false;
+    var outer = false;
+    if (flags) |f| {
+        word = Input.flagsContain(f, .word);
+        outer = Input.flagsContain(f, .outer);
+    }
+
+    const tarea = self.textarea;
+
+    self.setMode(.normal);
+    tarea.selection = null;
+
+    const buf: *Buffer = tarea.curBuf();
+    const row: *Buffer.Row = buf.curRow();
+    const row_len: i32 = @intCast(row.len());
+
+    if (buf.col < 0 and buf.row > 0) {
+        return;
+    }
+
+    const cur_char = row.getValue()[@intCast(buf.col)];
+
+    var p_index = buf.col - 1;
+    p_index = std.math.clamp(buf.col, 0, row_len - 1);
+    const p_char = row.getValue()[@intCast(p_index)];
+
+    var n_index = buf.col + 1;
+    n_index = std.math.clamp(buf.col, 0, row_len - 1);
+    const n_char = row.getValue()[@intCast(n_index)];
+
+    // if it's a single character or not a character at all
+    // just enter visual mode and reeturn
+    if ((TextArea.charIsSpace(p_char.grapheme) and
+        TextArea.charIsSpace(n_char.grapheme)) or
+        TextArea.charIsSpace(cur_char.grapheme))
+    {
+        self.setMode(.visual);
+        return;
+    }
+
+    const first_char = tarea.getFirstCharIndexOfWord();
+    var last_char = tarea.getLastCharIndexOfWord();
+    if (outer) {
+        last_char += 1;
+    }
+
+    tarea.selectRange(
+        .{ .row = buf.row, .col = @intCast(first_char) },
+        .{ .row = buf.row, .col = @intCast(last_char) },
+    );
 }
 
 pub fn esc(self: *Vim, flags: ?Input.Flags) void {

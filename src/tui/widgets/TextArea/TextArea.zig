@@ -943,6 +943,69 @@ pub fn setCursorRow(self: *TextArea, row: i32) void {
     buf.row = @intCast(std.math.clamp(clamped, 0, num_rows - 1));
 }
 
+pub fn selectRange(
+    self: *TextArea,
+    from: Buffer.CursorPos,
+    to: Buffer.CursorPos,
+) void {
+    self.vim.setMode(.visual);
+    self.selection = .init(.visual, from);
+    self.selection.?.cur_pos = to;
+    self.moveCursorTo(to.row, to.col);
+}
+
+/// Returns the index of the first character of the current word.
+pub fn getFirstCharIndexOfWord(self: TextArea) i32 {
+    const buf: *Buffer = self.curBuf();
+    const row: *Buffer.Row = buf.curRow();
+
+    var index: usize = 0;
+    var col: usize = @intCast(buf.col);
+    while (col > 0) {
+        col -= 1;
+
+        // break early if we're already at the start of the line
+        if (col <= 0) {
+            index = col;
+            break;
+        }
+
+        const char = row.getValue()[col];
+        if (TextArea.charIsSpace(char.grapheme)) {
+            index = col + 1;
+            break;
+        }
+    }
+
+    return @intCast(index);
+}
+
+/// Returns the index of the last character of the current word.
+pub fn getLastCharIndexOfWord(self: TextArea) i32 {
+    const buf: *Buffer = self.curBuf();
+    const row: *Buffer.Row = buf.curRow();
+
+    // determine the index of the last character of the current word
+    var index: usize = 0;
+    for (@intCast(buf.col)..row.len()) |col| {
+        const char = row.getValue()[col];
+
+        // if current index is larger than the row set the index
+        // to the index to the row length
+        if (col >= row.len() - 1) {
+            index = col;
+            break;
+        }
+
+        if (TextArea.charIsSpace(char.grapheme)) {
+            index = col - 1;
+            break;
+        }
+    }
+
+    return @intCast(index);
+}
+
 /// Copies the given string to the clipboard
 pub fn yank(self: *TextArea, text: []const u8) void {
     self.vim.setMode(.normal);
@@ -1105,7 +1168,7 @@ pub fn deinit(self: *TextArea) void {
     self.alloc.destroy(self.vim);
 }
 
-fn charIsSpace(char: []const u8) bool {
+pub fn charIsSpace(char: []const u8) bool {
     const utf8 = std.unicode.Utf8View.init(char) catch return false;
     var iter = utf8.iterator();
 

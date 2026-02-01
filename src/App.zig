@@ -97,7 +97,6 @@ pub fn run(self: *App) !void {
     while (!self.should_quit) {
         const event: Event = self.loop.nextEvent();
         try self.update(event);
-
         try self.draw();
 
         // Render the screen

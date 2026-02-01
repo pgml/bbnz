@@ -75,10 +75,9 @@ pub const Column = struct {
     }
 
     pub fn setValue(self: *Column, win: vx.Window, str: []const u8) !void {
-        const str_cpy = try self.alloc.dupe(u8, str);
-        var cmd_iter = vx.unicode.graphemeIterator(str_cpy);
+        var cmd_iter = vx.unicode.graphemeIterator(str);
         while (cmd_iter.next()) |grapheme| {
-            const g = grapheme.bytes(str_cpy);
+            const g = grapheme.bytes(str);
             const w: u8 = @intCast(win.gwidth(g));
             try self.value.append(self.alloc, .{ .grapheme = g, .width = w });
         }
@@ -123,6 +122,7 @@ pub const Column = struct {
     }
 
     pub fn deinit(self: *Column) void {
+        self.alloc.destroy(self.cell);
         self.clear();
         self.arena.deinit();
     }
@@ -144,11 +144,6 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*StatusBar 
     try self.setupColumns();
 
     return self;
-}
-
-pub fn setupColumns(self: *StatusBar) !void {
-    const gen: *Column = try .init(self.alloc);
-    try self.colums.put(.general, gen);
 }
 
 pub fn update(self: *StatusBar, event: App.Event) !void {
@@ -181,18 +176,28 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
             }
         },
         .update_statusbar => |cnt| {
-            var iter = self.colums.iterator();
             const win = self.win orelse return;
-            while (iter.next()) |col| {
-                if (col.key_ptr.* == cnt.col) {
-                    col.value_ptr.*.clear();
-                    try col.value_ptr.*.setValue(win, cnt.text);
-                }
-            }
+            const entry = self.colums.getEntry(cnt.col) orelse return;
+            entry.value_ptr.*.clear();
+            try entry.value_ptr.*.setValue(win, cnt.text);
         },
         .winsize => |ws| {
+            var gen_col_w: u16 = 0;
             if (self.colums.getEntry(.general)) |col| {
-                col.value_ptr.*.cell.setWidth(ws.cols / 2);
+                const w = ws.cols - 50;
+                col.value_ptr.*.cell.setWidth(w);
+                gen_col_w = w;
+            }
+
+            var key_col_w: u16 = 0;
+            if (self.colums.getEntry(.key_info)) |col| {
+                const w = ws.cols - 50;
+                key_col_w = w;
+                col.value_ptr.*.cell.setOffsetX(gen_col_w);
+            }
+
+            if (self.colums.getEntry(.file_info)) |col| {
+                col.value_ptr.*.cell.setOffsetX(ws.cols - 20);
             }
         },
         else => {},
@@ -225,7 +230,7 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
             content = try self.getModeStr(arena.allocator());
         }
 
-        const col = column.draw(self.win.?, content);
+        const col = column.draw(child_win, content);
 
         if (self.cell.isFocused() and col_pos == .general) {
             child_win.showCursor(col, 0);
@@ -260,6 +265,21 @@ fn write(self: *StatusBar) !void {
     });
 
     try self.setColumnContent(.general, success);
+    try self.setColumnContent(.file_info, success);
+}
+
+pub fn setupColumns(self: *StatusBar) !void {
+    try self.colums.put(.general, try .init(self.alloc));
+
+    var col_key_info: *Column = try .init(self.alloc);
+    col_key_info.cell.setWidth(15);
+    col_key_info.position = .key_info;
+    try self.colums.put(.key_info, col_key_info);
+
+    var col_file_info: *Column = try .init(self.alloc);
+    col_file_info.cell.setWidth(15);
+    col_file_info.position = .file_info;
+    try self.colums.put(.file_info, col_file_info);
 }
 
 pub fn setColumnContent(
@@ -270,6 +290,13 @@ pub fn setColumnContent(
     self.app.loop.postEvent(.{ .update_statusbar = .{
         .col = column,
         .text = text,
+    } });
+}
+
+pub fn clearColumn(self: *StatusBar, column: ColumnPos) !void {
+    self.app.loop.postEvent(.{ .update_statusbar = .{
+        .col = column,
+        .text = "",
     } });
 }
 
@@ -323,7 +350,8 @@ pub fn blur(self: *StatusBar) void {
 }
 
 pub fn deinit(self: *StatusBar) void {
-    if (self.colums.getEntry(.general)) |entry| {
+    var col_iter = self.colums.iterator();
+    while (col_iter.next()) |entry| {
         entry.value_ptr.*.deinit();
         self.alloc.destroy(entry.value_ptr.*);
     }

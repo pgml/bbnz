@@ -519,12 +519,21 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
             key_text = try std.mem.concat(self.alloc, u8, &conc);
         }
 
+        // clear keyinfo statusbar column on escape
+        if (key.codepoint == 27 and
+            self.cur_seq.items.len > 0 and
+            self.app.mode != .insert)
+        {
+            try self.app.status_bar.clearColumn(.key_info);
+        }
+
         // if the current key is a sequence key and not a registered keybind
         // add them to the current sequence
         if (self.isSeqKey(key_text) and
             self.cur_seq.items.len == 0 and
             !self.isBinding(key_text))
         {
+            try self.app.status_bar.setColumnContent(.key_info, key_text);
             try self.cur_seq.append(self.alloc, key_text);
             return;
         }
@@ -554,6 +563,10 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
                 .editor => |f| f(self.app.editor),
                 .textarea => |f| f(&self.app.editor.textarea),
                 .vim => |f| f(self.app.editor.textarea.vim, reg_fn.flags),
+            }
+
+            if (self.app.mode != .insert) {
+                try self.app.status_bar.clearColumn(.key_info);
             }
 
             self.resetKeySeq();
@@ -586,6 +599,7 @@ fn sleep(self: *Input, gen: u64) void {
     // Only reset if no newer timer was started
     if (self.seq_generation.load(.seq_cst) == gen) {
         self.resetKeySeq();
+        self.app.status_bar.clearColumn(.key_info) catch return;
     }
 }
 

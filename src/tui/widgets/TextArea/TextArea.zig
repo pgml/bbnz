@@ -195,34 +195,28 @@ pub fn draw(self: *TextArea) !void {
         const row_index: u16 = @intCast(i);
         var col: u16 = 0;
 
-        for (row.getValue()) |*char| {
-            var iter = vx.unicode.graphemeIterator(char.grapheme);
-            while (iter.next()) |grapheme| {
-                const g = grapheme.bytes(char.grapheme);
-                char.width = @intCast(win.gwidth(g));
-
-                if (self.use_virtual_cursor and col == buf.col and
-                    (buf.row == row_index or self.getTermRow() == row_index))
-                {
-                    style.bg = .{ .rgb = self.vim.mode.bgColor() };
-                    style.fg = .{ .rgb = self.vim.mode.fgColor() };
-                }
-
-                if (self.selection) |*selection| {
-                    selection.mode = self.app.mode;
-                    selection.cur_pos = buf.cursor_pos;
-                    if (selection.isInRange(row_index, col)) {
-                        style.bg = Theme.Color.Selection.bg;
-                    }
-                }
-
-                view.writeCell(win, col, row_index, .{
-                    .char = .{ .grapheme = g, .width = char.width },
-                    .style = style,
-                });
-
-                style = .{};
+        for (row.getValue()) |char| {
+            if (self.use_virtual_cursor and col == buf.col and
+                (buf.row == row_index or self.getTermRow() == row_index))
+            {
+                style.bg = .{ .rgb = self.vim.mode.bgColor() };
+                style.fg = .{ .rgb = self.vim.mode.fgColor() };
             }
+
+            if (self.selection) |*selection| {
+                selection.mode = self.app.mode;
+                selection.cur_pos = buf.cursor_pos;
+                if (selection.isInRange(row_index, col)) {
+                    style.bg = Theme.Color.Selection.bg;
+                }
+            }
+
+            view.writeCell(win, col, row_index, .{
+                .char = .{ .grapheme = char.grapheme, .width = char.width },
+                .style = style,
+            });
+
+            style = .{};
             col += 1;
         }
 
@@ -403,7 +397,7 @@ pub fn deleteAfterCursor(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
     var cur_row: *Buffer.Row = buf.curRow();
     const col: u32 = @intCast(buf.col);
-    const after_cursor: []Character = cur_row.getValue()[col..];
+    const after_cursor = cur_row.getValue()[col..];
 
     // make a copy of the value after the cursor that needs to be moved
     // to the next line.
@@ -462,7 +456,7 @@ pub fn joinLine(self: *TextArea) void {
     }
 
     var next_row: *Buffer.Row = buf.rows.items[@intCast(next_index)];
-    const next_row_val: []Character = next_row.getValue();
+    const next_row_val = next_row.getValue();
     const line_len: u16 = @intCast(buf.curRow().len());
 
     if (next_row_val.len == 0) {
@@ -662,7 +656,7 @@ pub fn characterLeft(self: *TextArea) void {
         return;
     }
 
-    const char: Character = buf.curRow().getValue()[@intCast(buf.col - 1)];
+    const char = buf.curRow().getValue()[@intCast(buf.col - 1)];
     self.setCursorCol(buf.col - char.width);
     buf.last_col = 0;
 }
@@ -670,7 +664,7 @@ pub fn characterLeft(self: *TextArea) void {
 /// Moves the cursor one character to the right.
 pub fn characterRight(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
-    const row_val: []Character = buf.curRow().getValue();
+    const row_val = buf.curRow().getValue();
 
     var row_len = row_val.len;
     // In vim mode we don't allow the cursor to move past the last character
@@ -684,7 +678,7 @@ pub fn characterRight(self: *TextArea) void {
         return;
     }
 
-    const char: Character = row_val[@intCast(buf.col)];
+    const char = row_val[@intCast(buf.col)];
     self.setCursorCol(buf.col + char.width);
     buf.last_col = 0;
 }
@@ -706,7 +700,7 @@ pub fn wordRight(self: *TextArea) void {
             return;
         }
 
-        const char: Character = row.getValue()[i];
+        const char = row.getValue()[i];
 
         self.characterRight();
 
@@ -722,7 +716,7 @@ pub fn wordRight(self: *TextArea) void {
 pub fn wordRightEnd(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     const row: *Buffer.Row = buf.curRow();
-    const row_val: []Character = row.getValue();
+    const row_val = row.getValue();
 
     if (self.tryNextLine()) {
         return;
@@ -731,7 +725,7 @@ pub fn wordRightEnd(self: *TextArea) void {
     for (@intCast(buf.col + 1)..row.len()) |_| {
         self.characterRight();
 
-        var char: Character = row_val[@intCast(buf.col)];
+        var char = row_val[@intCast(buf.col)];
         while (buf.col < row.len()) {
             char = row_val[@intCast(buf.col)];
             if (!charIsSpace(char.grapheme)) {
@@ -768,7 +762,7 @@ pub fn wordLeft(self: *TextArea) void {
     var i: usize = @intCast(buf.col - 1);
     while (i > 0) {
         i -= 1;
-        const char: Character = row.getValue()[i];
+        const char = row.getValue()[i];
 
         self.characterLeft();
         if (charIsSpace(char.grapheme)) {
@@ -790,7 +784,7 @@ pub fn wordLeftEnd(self: *TextArea) void {
     self.wordRight();
 
     for (0..@intCast(buf.col)) |i| {
-        const char: Character = row.getValue()[i];
+        const char = row.getValue()[i];
         if (charIsSpace(char.grapheme)) {
             self.characterRight();
             return;

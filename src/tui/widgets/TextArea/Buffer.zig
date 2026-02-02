@@ -8,8 +8,10 @@ const Key = vx.Key;
 
 const Dmp = @import("diffmatchpatch");
 
+const Cell = @import("../../layout/Cell.zig");
 const TextArea = @import("TextArea.zig");
-const Char = TextArea.Character;
+const Char = Cell.Character;
+//const Char = vx.Cell.Character;
 const Vim = @import("Vim.zig");
 
 const HistoryError = error{

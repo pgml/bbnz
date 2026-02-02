@@ -50,12 +50,6 @@ pub const Event = union(enum) {
     key_press: Key,
 };
 
-pub const Character = struct {
-    grapheme: []const u8 = " ",
-    width: u8 = 1,
-    is_selected: bool = false,
-};
-
 pub const Selection = struct {
     start_pos: Buffer.CursorPos,
 

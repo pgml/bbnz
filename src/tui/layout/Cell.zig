@@ -21,6 +21,12 @@ is_focused: bool,
 
 title: []const u8 = "",
 
+pub const Character = struct {
+    grapheme: []const u8 = " ",
+    width: u8 = 1,
+    is_selected: bool = false,
+};
+
 pub fn init(alloc: std.mem.Allocator) !*Cell {
     const self = try alloc.create(Cell);
 

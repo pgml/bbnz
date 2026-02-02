@@ -47,6 +47,7 @@ pub const FlagValue = enum {
     above,
     below,
     remaining,
+    selection,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -446,6 +447,7 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "above")) flag = .above;
         if (std.mem.eql(u8, flag_str, "below")) flag = .below;
         if (std.mem.eql(u8, flag_str, "remaining")) flag = .remaining;
+        if (std.mem.eql(u8, flag_str, "selection")) flag = .selection;
         return flag;
     }
 };

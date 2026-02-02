@@ -411,6 +411,8 @@ pub fn deleteAfterCursor(self: *TextArea) !void {
     }
 }
 
+/// Deletes the selected text.
+/// Does not return to normal mode.
 pub fn deleteSelection(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
     const sel = self.selection orelse return;

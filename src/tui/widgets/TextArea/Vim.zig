@@ -317,12 +317,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
             }
         },
         .insert => {
-            self.textarea.newHistoryEntry();
-            self.mode = .insert;
-
-            if (self.textarea.win) |win| {
-                win.screen.cursor_shape = .beam_blink;
-            }
+            self.enterInsertMode(true);
         },
         else => {},
     }
@@ -331,6 +326,21 @@ pub fn setMode(self: *Vim, mode: Mode) void {
         if (textarea.selection == null) {
             textarea.selection = .init(mode, buf.cursor_pos);
         }
+    }
+}
+
+/// Sets the mode to `insert` and changes the cursor shape to a blinking beam.
+/// If `with_history` is true it also create a new history entry._
+fn enterInsertMode(self: *Vim, with_history: bool) void {
+    if (with_history) {
+        self.textarea.newHistoryEntry();
+    }
+
+    self.mode = .insert;
+    self.textarea.app.mode = self.mode;
+
+    if (self.textarea.win) |win| {
+        win.screen.cursor_shape = .beam_blink;
     }
 }
 
@@ -482,21 +492,20 @@ pub fn cCmd(self: *Vim, flags: ?Input.Flags) void {
         self.delWordActions(flags);
     }
 
+    if (Input.flagsContain(flags, .selection)) {
+        t.deleteSelection() catch return;
+    }
+
     if (Input.flagsContain(flags, .line)) {
         self.delLineActions(flags);
         // We add a line above the deleted one so that we
         // have a fresh line to insert stuff into
-        if (Input.flagsContain(flags, .above) or
-            Input.flagsContain(flags, .below))
-        {
-            t.addLineAbove() catch return;
-        }
-        t.updateHistoryEntry() catch return;
+        t.addLineAbove() catch return;
     }
 
     // set insert mode after any text changes happpen because
     // some delete functions may temporarily slip into other modes.
-    self.setMode(.insert);
+    self.enterInsertMode(false);
     self.resetSeq();
     try t.app.status_bar.clearColumn(.key_info);
 }
@@ -510,12 +519,16 @@ pub fn dCmd(self: *Vim, flags: ?Input.Flags) void {
         self.delWordActions(flags);
     }
 
+    if (Input.flagsContain(flags, .selection)) {
+        t.deleteSelection() catch return;
+    }
+
     // delete line actions
     if (Input.flagsContain(flags, .line)) {
         self.delLineActions(flags);
-        t.updateHistoryEntry() catch return;
     }
 
+    self.setMode(.normal);
     self.resetSeq();
 }
 
@@ -550,7 +563,6 @@ fn delWordActions(self: *Vim, flags: ?Input.Flags) void {
         self.selectWord(flags);
     }
     t.deleteSelection() catch return;
-    self.setMode(.normal);
 }
 
 pub fn gCmd(self: *Vim, flags: ?Input.Flags) void {

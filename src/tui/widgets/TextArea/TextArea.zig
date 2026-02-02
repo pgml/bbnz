@@ -397,13 +397,6 @@ pub fn deleteAfterCursor(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
     var cur_row: *Buffer.Row = buf.curRow();
     const col: u32 = @intCast(buf.col);
-    const after_cursor = cur_row.getValue()[col..];
-
-    // make a copy of the value after the cursor that needs to be moved
-    // to the next line.
-    const after_cursor_cp = try self.alloc.alloc(Character, after_cursor.len);
-    defer self.alloc.free(after_cursor_cp);
-    @memmove(after_cursor_cp, after_cursor);
 
     // Remove the value after the cursor from the current line.
     for (col..cur_row.len()) |_| {

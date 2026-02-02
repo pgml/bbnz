@@ -481,8 +481,6 @@ pub fn joinLine(self: *TextArea) void {
         return;
     }
 
-    self.newHistoryEntry();
-
     // Prepend whitespace when line to join doesn't start with one
     // and is not empty
     if (!std.mem.eql(u8, next_row_val[0].grapheme, " ") and
@@ -498,7 +496,6 @@ pub fn joinLine(self: *TextArea) void {
     self.moveCursorTo(buf.row, line_len);
     self.deleteLineAt(next_index);
     buf.shrinkAndFree();
-    self.updateHistoryEntry() catch return;
 }
 
 /// Move the cursor to the start of the line.

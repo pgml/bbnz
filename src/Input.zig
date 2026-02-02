@@ -728,7 +728,9 @@ fn wordLeft(self: *Input, flags: ?Flags) void {
 /// `flags` exists for Input command API compatibility and is ignored here.
 fn joinLine(self: *Input, flags: ?Flags) void {
     _ = flags;
+    self.app.editor.textarea.newHistoryEntry();
     self.app.editor.textarea.joinLine();
+    self.app.editor.textarea.updateHistoryEntry() catch return;
 }
 
 fn closeNote(self: *Input, flags: ?Flags) void {

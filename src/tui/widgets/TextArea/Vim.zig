@@ -200,6 +200,7 @@ pub fn update(self: *Vim, event: TextArea.Event, textarea: *TextArea) !void {
             }
         },
     }
+    self.textarea.app.mode = self.mode;
 }
 
 //pub fn dispatchCmds(self: *Vim) void {
@@ -291,9 +292,10 @@ pub fn disable(self: *Vim) void {
 }
 
 pub fn setMode(self: *Vim, mode: Mode) void {
-    self.mode = mode;
     const buf: *TextArea.Buffer = self.textarea.curBuf();
     const textarea: *TextArea = self.textarea;
+
+    self.mode = mode;
 
     switch (mode) {
         .normal => {
@@ -308,18 +310,19 @@ pub fn setMode(self: *Vim, mode: Mode) void {
 
             const meta = textarea.app.config.meta_infos;
             meta.updateFileInfo(buf.path, .cursor_pos, buf.cursor_pos) catch return;
-            textarea.app.mode = .normal;
             textarea.selection = null;
+
+            if (self.textarea.win) |win| {
+                win.screen.cursor_shape = .block;
+            }
         },
         .insert => {
-            textarea.newHistoryEntry();
-            textarea.app.mode = .insert;
-        },
-        .visual => {
-            textarea.app.mode = .visual;
-        },
-        .visual_line => {
-            textarea.app.mode = .visual_line;
+            self.textarea.newHistoryEntry();
+            self.mode = .insert;
+
+            if (self.textarea.win) |win| {
+                win.screen.cursor_shape = .beam_blink;
+            }
         },
         else => {},
     }
@@ -336,10 +339,7 @@ pub fn resetSeq(self: *Vim) void {
 }
 
 pub fn visual(self: *Vim, flags: ?Input.Flags) void {
-    var line = false;
-    if (flags) |f| {
-        line = Input.flagsContain(f, .line);
-    }
+    const line = Input.flagsContain(flags, .line);
 
     if (line) {
         if (self.mode == .normal or self.mode == .visual) {
@@ -361,7 +361,6 @@ pub fn edit(self: *Vim, flags: ?Input.Flags) void {
     _ = flags;
 
     self.setMode(.insert);
-    self.textarea.newHistoryEntry();
 
     switch (self.cp) {
         'a' => self.textarea.characterRight(),
@@ -371,10 +370,6 @@ pub fn edit(self: *Vim, flags: ?Input.Flags) void {
         },
         'I' => self.textarea.beginLine(true),
         else => {},
-    }
-
-    if (self.textarea.win) |win| {
-        win.screen.cursor_shape = .beam_blink;
     }
 }
 
@@ -424,11 +419,7 @@ pub fn newLine(self: *Vim, flags: ?Input.Flags) void {
 }
 
 pub fn beginLine(self: *Vim, flags: ?Input.Flags) void {
-    var non_white = false;
-
-    if (flags) |f| {
-        non_white = Input.flagsContain(f, .non_white);
-    }
+    const non_white = Input.flagsContain(flags, .non_white);
 
     self.textarea.beginLine(non_white);
 
@@ -480,38 +471,86 @@ pub fn tab(self: *Vim, flags: ?Input.Flags) void {
 }
 
 pub fn cCmd(self: *Vim, flags: ?Input.Flags) void {
-    _ = flags;
-    switch (self.cp) {
-        'c' => {
-            self.setMode(.insert);
-            self.textarea.deleteCurLine(true);
-            self.textarea.addLineAbove() catch return;
-        },
-        else => {
-            // just return without updating the history if any other key
-            // was pressed
-            self.resetSeq();
-            return;
-        },
+    const t = self.textarea;
+
+    // Even though `setMode(.insert)` automatically creates a history entry
+    // we need to create one here because we need a point before
+    // any changes to the text happen.
+    t.newHistoryEntry();
+
+    if (Input.flagsContain(flags, .word)) {
+        self.delWordActions(flags);
     }
+
+    if (Input.flagsContain(flags, .line)) {
+        self.delLineActions(flags);
+        // We add a line above the deleted one so that we
+        // have a fresh line to insert stuff into
+        if (Input.flagsContain(flags, .above) or
+            Input.flagsContain(flags, .below))
+        {
+            t.addLineAbove() catch return;
+        }
+        t.updateHistoryEntry() catch return;
+    }
+
+    // set insert mode after any text changes happpen because
+    // some delete functions may temporarily slip into other modes.
+    self.setMode(.insert);
     self.resetSeq();
+    try t.app.status_bar.clearColumn(.key_info);
 }
 
 pub fn dCmd(self: *Vim, flags: ?Input.Flags) void {
-    _ = flags;
-    self.textarea.newHistoryEntry();
-    switch (self.cp) {
-        'd' => self.textarea.deleteCurLine(true),
-        'j' => self.textarea.deleteNLines(2),
-        else => {
-            // just return without updating the history if any other key
-            // was pressed
-            self.resetSeq();
-            return;
-        },
+    const t = self.textarea;
+    t.newHistoryEntry();
+
+    // delete word actions
+    if (Input.flagsContain(flags, .word)) {
+        self.delWordActions(flags);
     }
-    self.textarea.updateHistoryEntry() catch return;
+
+    // delete line actions
+    if (Input.flagsContain(flags, .line)) {
+        self.delLineActions(flags);
+        t.updateHistoryEntry() catch return;
+    }
+
     self.resetSeq();
+}
+
+/// Deletes the current line or the current line including the
+/// line above or under depending on if `flags` contains
+/// `FlagValue.above` or `FlagValue.below`.
+fn delLineActions(self: *Vim, flags: ?Input.Flags) void {
+    const t = self.textarea;
+    if (Input.flagsContain(flags, .above)) {
+        t.cursorUp();
+        t.deleteNLines(2);
+    } else if (Input.flagsContain(flags, .below)) {
+        t.deleteNLines(2);
+    } else {
+        t.deleteCurLine(true);
+    }
+}
+
+/// Deletes the current word or the rest of the word from the cursor
+/// position if flags contains `FlagValue.remaining`.
+fn delWordActions(self: *Vim, flags: ?Input.Flags) void {
+    const t = self.textarea;
+    const buf = t.curBuf();
+
+    if (Input.flagsContain(flags, .remaining)) {
+        const end_word = t.getLastColumnOfWord();
+        t.selectRange(buf.cursorPos(), .{
+            .row = buf.row,
+            .col = end_word,
+        });
+    } else {
+        self.selectWord(flags);
+    }
+    t.deleteSelection() catch return;
+    self.setMode(.normal);
 }
 
 pub fn gCmd(self: *Vim, flags: ?Input.Flags) void {
@@ -538,7 +577,6 @@ pub fn zCmd(self: *Vim, flags: ?Input.Flags) void {
         //'z' => self.textarea.centreView(),
         else => {},
     }
-
     self.resetSeq();
 }
 
@@ -555,13 +593,6 @@ pub fn changeAfterCursor(self: *Vim, flags: ?Input.Flags) void {
 }
 
 pub fn select(self: *Vim, flags: ?Input.Flags) void {
-    var word = false;
-    var outer = false;
-    if (flags) |f| {
-        word = Input.flagsContain(f, .word);
-        outer = Input.flagsContain(f, .outer);
-    }
-
     const tarea = self.textarea;
 
     self.setMode(.normal);
@@ -595,9 +626,10 @@ pub fn select(self: *Vim, flags: ?Input.Flags) void {
         return;
     }
 
-    const first_char = tarea.getFirstCharIndexOfWord();
-    var last_char = tarea.getLastCharIndexOfWord();
-    if (outer) {
+    const first_char = tarea.getFirstColumnOfWord();
+    var last_char = tarea.getLastColumnOfWord();
+
+    if (Input.flagsContain(flags, .outer)) {
         last_char += 1;
     }
 
@@ -605,6 +637,16 @@ pub fn select(self: *Vim, flags: ?Input.Flags) void {
         .{ .row = buf.row, .col = @intCast(first_char) },
         .{ .row = buf.row, .col = @intCast(last_char) },
     );
+}
+
+fn selectWord(self: *Vim, flags: ?Input.Flags) void {
+    const t = self.textarea;
+    self.select(flags);
+    // if we need to delete the space after the word
+    // just move the selection one character to the right
+    if (Input.flagsContain(flags, .outer)) {
+        t.characterRight();
+    }
 }
 
 pub fn esc(self: *Vim, flags: ?Input.Flags) void {
@@ -621,11 +663,6 @@ pub fn esc(self: *Vim, flags: ?Input.Flags) void {
 
     if (self.mode != .normal) {
         self.setMode(.normal);
-        self.textarea.app.mode = .normal;
-    }
-
-    if (self.textarea.win) |win| {
-        win.screen.cursor_shape = .block;
     }
 }
 

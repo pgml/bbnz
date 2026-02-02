@@ -411,6 +411,27 @@ pub fn deleteAfterCursor(self: *TextArea) !void {
     }
 }
 
+pub fn deleteSelection(self: *TextArea) !void {
+    const buf: *Buffer = self.curBuf();
+    const sel = self.selection orelse return;
+
+    var row_index: usize = 0;
+    for (buf.rows.items) |row| {
+        var col: u16 = 0;
+
+        for (row.getValue()) |_| {
+            defer col += 1;
+            if (!sel.isInRange(@intCast(row_index), col)) {
+                continue;
+            }
+            _ = self.deleteCharAt(sel.getStart().col);
+            buf.rows.items[row_index].shrinkAndFree();
+        }
+
+        row_index += 1;
+    }
+}
+
 /// Add a new line.
 /// If the cursor is not at the end of a line, the line gets automatically
 /// split, moving the text after (including) the cursor onto the new line.
@@ -955,7 +976,7 @@ pub fn selectRange(
 }
 
 /// Returns the index of the first character of the current word.
-pub fn getFirstCharIndexOfWord(self: TextArea) i32 {
+pub fn getFirstColumnOfWord(self: TextArea) i32 {
     const buf: *Buffer = self.curBuf();
     const row: *Buffer.Row = buf.curRow();
 
@@ -981,7 +1002,7 @@ pub fn getFirstCharIndexOfWord(self: TextArea) i32 {
 }
 
 /// Returns the index of the last character of the current word.
-pub fn getLastCharIndexOfWord(self: TextArea) i32 {
+pub fn getLastColumnOfWord(self: TextArea) i32 {
     const buf: *Buffer = self.curBuf();
     const row: *Buffer.Row = buf.curRow();
 

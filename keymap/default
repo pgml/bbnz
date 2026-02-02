@@ -147,12 +147,20 @@ mode normal(Editor) {
     bind "r"     fn: editor.replace                                   #todo
     bind "o"     fn: editor.insertBelow
 
-    bind "cc"    fn: editor.changeLine
-    bind "dd"    fn: editor.deleteLine
+    bind "cc"    fn: editor.change       flags: [line]
+    bind "cj"    fn: editor.change       flags: [line,below]
+    bind "ck"    fn: editor.change       flags: [line,above]
+    bind "cf"    fn: editor.changeCurToChar  flags: [op, await, incl]  #todo
+    bind "cw"    fn: editor.change       flags: [remaining,word]
+    bind "caw"   fn: editor.change       flags: [word,outer]
+    bind "ciw"   fn: editor.change       flags: [word]
+    bind "dd"    fn: editor.delete       flags: [line]
+    bind "dj"    fn: editor.delete       flags: [line,below]
+    bind "dk"    fn: editor.delete       flags: [line,above]
     bind "df"    fn: editor.deleteCurToChar  flags: [op, await, incl]  #todo
-    bind "dw"    fn: editor.deleteWord       flags: [remaining]       #todo
-    bind "daw"   fn: editor.deleteWord       flags: [outer]           #todo
-    bind "diw"   fn: editor.deleteWord                                #todo
+    bind "dw"    fn: editor.delete       flags: [remaining,word]
+    bind "daw"   fn: editor.delete       flags: [word,outer]
+    bind "diw"   fn: editor.delete       flags: [word]
 
     bind "C-r"   fn: editor.redo
 }

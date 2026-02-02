@@ -44,6 +44,9 @@ pub const FlagValue = enum {
     from_cursor,
     word,
     outer,
+    above,
+    below,
+    remaining,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -108,8 +111,8 @@ const fn_registry = [_]FnMap{
     .{ .name = "editor.prevWord",      .exec = .{ .input = wordLeft }},
     .{ .name = "editor.halfPageDown",  .exec = .{ .textarea = TextArea.halfPageDown }},
     .{ .name = "editor.halfPageUp",    .exec = .{ .textarea = TextArea.halfPageUp }},
-    .{ .name = "editor.changeLine",    .exec = .{ .vim = Vim.cCmd }},
-    .{ .name = "editor.deleteLine",    .exec = .{ .vim = Vim.dCmd }},
+    .{ .name = "editor.change",        .exec = .{ .vim = Vim.cCmd }},
+    .{ .name = "editor.delete",        .exec = .{ .vim = Vim.dCmd }},
     .{ .name = "editor.charLeft",      .exec = .{ .textarea = TextArea.characterLeft }},
     .{ .name = "editor.insertBefore",  .exec = .{ .vim = Vim.edit }},
     .{ .name = "editor.lineDown",      .exec = .{ .vim = Vim.down }},
@@ -440,6 +443,9 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "from_cursor")) flag = .from_cursor;
         if (std.mem.eql(u8, flag_str, "word")) flag = .word;
         if (std.mem.eql(u8, flag_str, "outer")) flag = .outer;
+        if (std.mem.eql(u8, flag_str, "above")) flag = .above;
+        if (std.mem.eql(u8, flag_str, "below")) flag = .below;
+        if (std.mem.eql(u8, flag_str, "remaining")) flag = .remaining;
         return flag;
     }
 };
@@ -769,8 +775,10 @@ fn resolveMode(mode_str: []const u8) TextArea.Vim.Mode {
     return mode;
 }
 
-pub fn flagsContain(haystack: Flags, needle: FlagValue) bool {
-    for (haystack.items) |item| {
+pub fn flagsContain(haystack: ?Flags, needle: FlagValue) bool {
+    const flags = haystack orelse return false;
+
+    for (flags.items) |item| {
         if (item == needle) {
             return true;
         }

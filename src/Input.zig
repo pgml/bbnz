@@ -24,6 +24,8 @@ keymap: KeyMap,
 
 cur_seq: std.ArrayList([]const u8) = .empty,
 
+cur_seq_str: []const u8 = "",
+
 /// The time in milliseconds to wait for a mapped
 /// sequence to complete. This is basically `timeoutlen` from Vim.
 seq_timeout: u64 = 300,
@@ -207,12 +209,10 @@ const KeyMap = struct {
                 }
 
                 // find separator
-                const eq_pos = std.mem.indexOf(u8, rest[i..], ":") orelse break;
-
+                const sep_pos = std.mem.indexOf(u8, rest[i..], ":") orelse break;
                 // the key to the value
-                const key = std.mem.trim(u8, rest[i .. i + eq_pos], " \t");
-
-                i += eq_pos + 2;
+                const key = std.mem.trim(u8, rest[i .. i + sep_pos], " \t");
+                i += sep_pos + 2;
 
                 // find value end (next space or end-of-line)
                 var val_end = i;
@@ -362,9 +362,9 @@ const KeyMap = struct {
                 // (which would be the modifier + key) is sufficient.
                 try self.seq_keys.append(self.alloc, keybind[0..3]);
             } else {
-                // For simple motions we only need the first character so we
-                // now when to wait for another keypress.
-                try self.seq_keys.append(self.alloc, keybind[0..1]);
+                // For every other motions we need every character but
+                // the last one so we now when to wait for another keypress.
+                try self.seq_keys.append(self.alloc, keybind[0 .. keybind.len - 1]);
             }
         }
 
@@ -505,7 +505,8 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
         );
     }
 
-    var key_text = key.text orelse return;
+    const key_text = key.text orelse return;
+    self.cur_seq_str = key_text;
 
     if (self.app.mode != .insert and self.app.mode != .command) {
         // look for current key sequence keys and build a correct
@@ -521,7 +522,7 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
                 conc = [_][]const u8{ seq, " ", key_text };
             }
 
-            key_text = try std.mem.concat(self.alloc, u8, &conc);
+            self.cur_seq_str = try std.mem.concat(self.alloc, u8, &conc);
         }
 
         // clear keyinfo statusbar column on escape
@@ -534,12 +535,12 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
 
         // if the current key is a sequence key and not a registered keybind
         // add them to the current sequence
-        if (self.isSeqKey(key_text) and
-            self.cur_seq.items.len == 0 and
-            !self.isBinding(key_text))
+        if (self.isSeqKey(self.cur_seq_str) and
+            self.cur_seq.items.len >= 0 and
+            !self.isBinding(self.cur_seq_str))
         {
-            try self.app.status_bar.setColumnContent(.key_info, key_text);
-            try self.cur_seq.append(self.alloc, key_text);
+            try self.app.status_bar.setColumnContent(.key_info, self.cur_seq_str);
+            try self.cur_seq.append(self.alloc, self.cur_seq_str);
             return;
         }
     }
@@ -549,7 +550,7 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
         const motion = entry.key_ptr.*;
         const reg_fn = entry.value_ptr;
 
-        if (!std.mem.eql(u8, motion, key_text)) {
+        if (!std.mem.eql(u8, motion, self.cur_seq_str)) {
             self.resetKeySeq();
             continue;
         }

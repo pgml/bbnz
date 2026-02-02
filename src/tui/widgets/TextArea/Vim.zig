@@ -200,7 +200,6 @@ pub fn update(self: *Vim, event: TextArea.Event, textarea: *TextArea) !void {
             }
         },
     }
-    self.textarea.app.mode = self.mode;
 }
 
 //pub fn dispatchCmds(self: *Vim) void {
@@ -296,6 +295,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
     const textarea: *TextArea = self.textarea;
 
     self.mode = mode;
+    textarea.app.mode = self.mode;
 
     switch (mode) {
         .normal => {

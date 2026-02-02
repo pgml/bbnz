@@ -10,6 +10,7 @@ pub const App = @import("../../../App.zig");
 pub const Buffer = @import("Buffer.zig");
 pub const Vim = @import("Vim.zig");
 pub const Theme = @import("../../layout/theme.zig");
+pub const utils = @import("../../../utils.zig");
 
 alloc: std.mem.Allocator,
 
@@ -410,20 +411,77 @@ pub fn deleteSelection(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
     const sel = self.selection orelse return;
 
+    // little array to store which lines should be deleted completely
+    var del_lines: std.ArrayList(usize) = .empty;
+    defer del_lines.deinit(self.alloc);
+    var join = false;
+
     var row_index: usize = 0;
     for (buf.rows.items) |row| {
         var col: u16 = 0;
+
+        // store every empty line since `row.getValue()` doesn't store empty rows
+        // but we need to delete empty lines within the selection as well.
+        if (row.len() == 0 and !utils.listContains(usize, del_lines, row_index)) {
+            try del_lines.append(self.alloc, row_index);
+        }
 
         for (row.getValue()) |_| {
             defer col += 1;
             if (!sel.isInRange(@intCast(row_index), col)) {
                 continue;
             }
-            _ = self.deleteCharAt(sel.getStart().col);
-            buf.rows.items[row_index].shrinkAndFree();
+
+            // The column where the deletion should start
+            var c: usize = @intCast(sel.getStart().col);
+
+            // Any row that should be delete completely
+            if ((row_index > sel.getStart().row and
+                row_index < sel.getEnd().row))
+            {
+                // Store which rows should be deleted, we only clear the
+                // row's content here and delete the row later.
+                if (!utils.listContains(usize, del_lines, row_index)) {
+                    try del_lines.append(self.alloc, row_index);
+                }
+                join = true;
+                c = 0;
+            }
+
+            // Set the column of the last row to the first column of the row
+            // so that we delete the row's content up to the end of the
+            // selection.
+            if (row_index == sel.getEnd().row and col <= sel.getEnd().col and
+                sel.getStart().row != sel.getEnd().row)
+            {
+                join = true;
+                c = 0;
+            }
+
+            if (c >= row.len()) continue;
+            _ = row.value.orderedRemove(c);
         }
 
         row_index += 1;
+    }
+
+    // Delete the previously stored rows and delete them.
+    for (0..del_lines.items.len) |i| {
+        const fln = del_lines.items[0];
+        // Check again if the stored lines are in range, we previously
+        // stored every empty row because `row.getValue()` doesn't store them.
+        // Without this check we'd delete all empty rows. Nobody wants that.
+        if (sel.isInRange(@intCast(del_lines.items[i]), 0)) {
+            self.deleteLineAt(@intCast(fln));
+        }
+    }
+
+    // Move the cursor to the start of the selection
+    self.moveCursorTo(sel.getStart().row, sel.getStart().col);
+
+    // Finaly, join the remaining lines of the selection
+    if (join) {
+        self.joinLine();
     }
 }
 

@@ -97,7 +97,7 @@ pub fn run(self: *App) !void {
     while (!self.should_quit) {
         const event: Event = self.loop.nextEvent();
         try self.update(event);
-        try self.draw();
+        try self.draw(event);
 
         // Render the screen
         try self.vx.render(writer);
@@ -122,10 +122,10 @@ pub fn update(self: *App, event: Event) !void {
     }
 }
 
-pub fn draw(self: *App) !void {
+pub fn draw(self: *App, event: Event) !void {
     var win: vaxis.Window = self.vx.window();
     win.clear();
-    try self.initComponents(win);
+    try self.initComponents(win, event);
     self.win = win;
 }
 
@@ -137,7 +137,7 @@ fn restoreState(self: *App) !void {
     self.focusColumn(@intCast(self.config.meta_infos.current_column));
 }
 
-fn initComponents(self: *App, win: vaxis.Window) !void {
+fn initComponents(self: *App, win: vaxis.Window, event: Event) !void {
     const sb_height = self.status_bar.cell.height;
 
     self.directory_tree.cell.setHeight(win.height - sb_height);
@@ -155,7 +155,7 @@ fn initComponents(self: *App, win: vaxis.Window) !void {
     self.editor.cell.setHeight(win.height - sb_height);
     self.editor.cell.setOffsetY(0);
     self.editor.cell.setOffsetX(editor_xoff);
-    self.editor.draw(win);
+    self.editor.draw(win, event);
     try self.editor.drawHeader(win, editor_xoff + 1);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);

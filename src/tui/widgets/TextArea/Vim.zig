@@ -614,7 +614,7 @@ pub fn select(self: *Vim, flags: ?Input.Flags) void {
     const row: *Buffer.Row = buf.curRow();
     const row_len: i32 = @intCast(row.len());
 
-    if (buf.col < 0 and buf.row > 0) {
+    if ((buf.col < 0 and buf.row > 0) or row_len == 0) {
         return;
     }
 

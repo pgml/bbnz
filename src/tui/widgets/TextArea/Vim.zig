@@ -629,11 +629,12 @@ pub fn select(self: *Vim, flags: ?Input.Flags) void {
     const n_char = row.getValue()[@intCast(n_index)];
 
     // if it's a single character or not a character at all
-    // just enter visual mode and reeturn
+    // just select the whitespace, enter visual mode and return
     if ((TextArea.charIsSpace(p_char.grapheme) and
         TextArea.charIsSpace(n_char.grapheme)) or
         TextArea.charIsSpace(cur_char.grapheme))
     {
+        tarea.selectRange(buf.cursorPos(), buf.cursorPos());
         self.setMode(.visual);
         return;
     }

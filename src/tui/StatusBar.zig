@@ -243,55 +243,42 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
 /// Tells the textarea to save the buffer and prints a success message
 /// in the statusbar
 fn write(self: *StatusBar) !void {
-    var arena: std.heap.ArenaAllocator = .init(self.alloc);
-    defer arena.deinit();
-    const alloc = arena.allocator();
-
     const editor = self.app.editor;
-    const buf = editor.textarea.curBuf();
-    const rel_path = try editor.getRelativeBufPath(alloc);
+    const rel_path = editor.getRelativeBufPath(false);
     const bytes = try editor.textarea.writeBuf();
     self.app.cancelAction();
 
     var print_buf: [256]u8 = undefined;
-    const str = try std.fmt.bufPrint(&print_buf, "{}", .{bytes});
-    // horribly build the success message
-    const success: []const u8 = try std.mem.concat(alloc, u8, &[_][]const u8{
-        "\"",
-        rel_path[1..],
-        std.fs.path.sep_str,
-        buf.getName(),
-        "\", ",
-        str,
-        "B written",
-    });
+    const str = try std.fmt.bufPrint(
+        &print_buf,
+        "\"{s}\", {}B written",
+        .{ rel_path[1..], bytes },
+    );
 
-    try self.setColumnContent(.general, success);
-    try self.setColumnContent(.file_info, success);
+    try self.setColumnContent(.general, str);
+    try self.setColumnContent(.file_info, str);
 }
 
 pub fn setupColumns(self: *StatusBar) !void {
-    try self.colums.put(.general, try .init(self.alloc));
+    try self.columns.put(.general, try .init(self.alloc));
 
     var col_key_info: *Column = try .init(self.alloc);
     col_key_info.cell.setWidth(15);
     col_key_info.position = .key_info;
-    try self.colums.put(.key_info, col_key_info);
+    try self.columns.put(.key_info, col_key_info);
 
     var col_file_info: *Column = try .init(self.alloc);
     col_file_info.cell.setWidth(15);
     col_file_info.position = .file_info;
-    try self.colums.put(.file_info, col_file_info);
+    try self.columns.put(.file_info, col_file_info);
 }
 
-pub fn setColumnContent(
-    self: *StatusBar,
-    column: ColumnPos,
-    text: []const u8,
-) !void {
+pub fn setColumnContent(self: *StatusBar, col_pos: ColumnPos, text: []const u8) !void {
+    const col = self.columns.getEntry(col_pos) orelse return;
+    const col_alloc = col.value_ptr.*.alloc;
     self.app.loop.postEvent(.{ .update_statusbar = .{
-        .col = column,
-        .text = text,
+        .col = col_pos,
+        .text = try col_alloc.dupe(u8, text),
     } });
 }
 

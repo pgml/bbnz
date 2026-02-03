@@ -179,15 +179,22 @@ pub fn draw(self: *TextArea, event: App.Event) !void {
     const win: vx.Window = self.win.?;
     const view: *vx.widgets.ScrollView = self.scroll_view.?;
 
-    self.width = win.width;
-    self.height = win.height;
+    if (self.width != win.width or self.height != win.height) {
+        self.width = win.width;
+        self.height = win.height;
+    }
 
     const buf: *Buffer = self.curBuf();
-    buf.updateCursorPos();
+    if (event == .key_press) {
+        buf.updateCursorPos();
+    }
     var i: usize = 0;
 
-    for (buf.rows.items) |row| {
-        const row_index: u16 = @intCast(i);
+    const start = view.scroll.y;
+    const end = @min(start + win.height, buf.rows.items.len);
+
+    for (buf.rows.items[start..end]) |row| {
+        const row_index: u16 = @intCast(start + i);
         var col: u16 = 0;
 
         for (row.getValue()) |char| {
@@ -226,7 +233,9 @@ pub fn draw(self: *TextArea, event: App.Event) !void {
         }
 
         // Do cursor stuff only on current row
-        if (buf.row == row_index or self.getTermRow() == row_index) {
+        if ((buf.row == row_index or self.getTermRow() == row_index) and
+            event == .key_press)
+        {
             if (self.use_virtual_cursor or !self.is_focucsed) {
                 win.hideCursor();
             } else {

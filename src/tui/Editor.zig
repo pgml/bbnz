@@ -62,7 +62,7 @@ pub fn update(self: *Editor, event: App.Event) !void {
     }
 }
 
-pub fn draw(self: *Editor, win: vx.Window) void {
+pub fn draw(self: *Editor, win: vx.Window, event: App.Event) void {
     var child_win: vx.Window = win.child(self.cell.getChild());
     const gutter_width = 6;
     const top_padding = 0;
@@ -98,7 +98,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .height = self.textarea.height,
         }), self.scroll_view.scroll.y);
 
-        self.textarea.draw() catch return;
+        self.textarea.draw(event) catch return;
     }
 }
 

@@ -166,7 +166,7 @@ pub fn update(self: *TextArea, event: Event) !void {
     }
 }
 
-pub fn draw(self: *TextArea) !void {
+pub fn draw(self: *TextArea, event: App.Event) !void {
     var style: vx.Cell.Style = .{};
 
     if (self.win == null or
@@ -236,6 +236,21 @@ pub fn draw(self: *TextArea) !void {
 
         i += 1;
     }
+
+    if (event == .key_press) {
+        var tmp: [64]u8 = undefined;
+        const ln_info = try self.getLnInfo(&tmp);
+        try self.app.status_bar.setColumnContent(.file_info, ln_info);
+    }
+}
+
+pub fn getLnInfo(self: *TextArea, buf: []u8) ![]const u8 {
+    const ta_buf = self.app.editor.textarea.curBuf();
+    return try std.fmt.bufPrint(
+        buf,
+        "Ln {}, Col {}",
+        .{ ta_buf.row + 1, ta_buf.col + 1 },
+    );
 }
 
 fn isBefore(a: Buffer.CursorPos, b: Buffer.CursorPos) bool {

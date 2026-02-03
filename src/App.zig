@@ -41,6 +41,18 @@ win: vaxis.Window = undefined,
 
 loop: vaxis.Loop(Event) = undefined,
 
+curevent: Event = undefined,
+
+/// Special events that should asynchronously execute after a certain delay.
+deferred_events: std.ArrayList(DeferredEvent) = .empty,
+
+/// Events other then the default vaxis events that are executed after the
+/// main loop unlocks.
+custom_events: std.ArrayList(Event) = .empty,
+
+/// Whether the main loop should be rerendered.
+redraw_ui: bool = false,
+
 pub const Event = union(enum) {
     key_press: vaxis.Key,
     key_release: vaxis.Key,
@@ -49,6 +61,15 @@ pub const Event = union(enum) {
         col: StatusBar.ColumnPos,
         text: []const u8,
     },
+};
+
+pub const DeferredEvent = struct {
+    due: i64,
+    cb: struct {
+        func: *const fn (*anyopaque) void,
+        ctx: *anyopaque,
+    },
+    redraw_ui: bool = false,
 };
 
 pub fn init(alloc: std.mem.Allocator) !App {
@@ -94,14 +115,44 @@ pub fn run(self: *App) !void {
     try self.directory_tree.run();
     try self.restoreState();
 
-    while (!self.should_quit) {
-        const event: Event = self.loop.nextEvent();
-        try self.update(event);
-        try self.draw(event);
+    const framerate: u128 = 60;
+    const tick_ms: u128 = @divFloor(std.time.ms_per_s, framerate);
+    var next_frame_ms: u128 = @intCast(std.time.milliTimestamp());
 
-        // Render the screen
-        try self.vx.render(writer);
-        try writer.flush();
+    while (!self.should_quit) {
+        const now: u128 = @intCast(std.time.milliTimestamp());
+        if (now >= next_frame_ms) {
+            // Deadline exceeded. Schedule the next frame
+            next_frame_ms = now + tick_ms;
+        } else {
+            // Sleep until the deadline
+            std.Thread.sleep(@intCast((next_frame_ms - now) * std.time.ns_per_ms));
+            next_frame_ms += tick_ms;
+        }
+
+        try self.runScheduledEvents(@intCast(now));
+
+        {
+            self.loop.queue.lock();
+            defer self.loop.queue.unlock();
+            while (self.loop.queue.drain()) |event| {
+                self.curevent = event;
+                try self.update(event);
+                try self.draw();
+                self.redraw_ui = true;
+            }
+        }
+
+        // run all custom events after the vaxis events.
+        for (self.custom_events.items) |event| {
+            _ = self.loop.tryPostEvent(event);
+        }
+        self.custom_events.clearAndFree(self.alloc);
+
+        if (self.redraw_ui) {
+            try self.vx.render(writer);
+            try writer.flush();
+        }
     }
 }
 
@@ -122,11 +173,39 @@ pub fn update(self: *App, event: Event) !void {
     }
 }
 
-pub fn draw(self: *App, event: Event) !void {
+pub fn draw(self: *App) !void {
     var win: vaxis.Window = self.vx.window();
     win.clear();
-    try self.initComponents(win, event);
+    try self.initComponents(win);
     self.win = win;
+}
+
+/// Collects and runs all deferred events at a specific time.
+/// This should be executed in a non-blocking environment.
+fn runScheduledEvents(self: *App, now: i64) !void {
+    var schedule_events: std.ArrayListUnmanaged(DeferredEvent) = .empty;
+    defer schedule_events.deinit(self.alloc);
+
+    var i: usize = 0;
+    while (i < self.deferred_events.items.len) {
+        const event = self.deferred_events.items[i];
+
+        if (now >= event.due) {
+            try schedule_events.append(self.alloc, event);
+            _ = self.deferred_events.swapRemove(i);
+            continue;
+        }
+
+        i += 1;
+    }
+
+    for (schedule_events.items) |event| {
+        event.cb.func(event.cb.ctx);
+        self.redraw_ui = event.redraw_ui;
+        if (event.redraw_ui) {
+            try self.draw();
+        }
+    }
 }
 
 fn restoreState(self: *App) !void {
@@ -137,7 +216,7 @@ fn restoreState(self: *App) !void {
     self.focusColumn(@intCast(self.config.meta_infos.current_column));
 }
 
-fn initComponents(self: *App, win: vaxis.Window, event: Event) !void {
+fn initComponents(self: *App, win: vaxis.Window) !void {
     const sb_height = self.status_bar.cell.height;
 
     self.directory_tree.cell.setHeight(win.height - sb_height);
@@ -155,7 +234,7 @@ fn initComponents(self: *App, win: vaxis.Window, event: Event) !void {
     self.editor.cell.setHeight(win.height - sb_height);
     self.editor.cell.setOffsetY(0);
     self.editor.cell.setOffsetX(editor_xoff);
-    self.editor.draw(win, event);
+    self.editor.draw(win);
     try self.editor.drawHeader(win, editor_xoff + 1);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);

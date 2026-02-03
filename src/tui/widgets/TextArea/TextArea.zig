@@ -166,7 +166,7 @@ pub fn update(self: *TextArea, event: Event) !void {
     }
 }
 
-pub fn draw(self: *TextArea, event: App.Event) !void {
+pub fn draw(self: *TextArea) !void {
     var style: vx.Cell.Style = .{};
 
     if (self.win == null or
@@ -185,7 +185,7 @@ pub fn draw(self: *TextArea, event: App.Event) !void {
     }
 
     const buf: *Buffer = self.curBuf();
-    if (event == .key_press) {
+    if (self.app.curevent == .key_press) {
         buf.updateCursorPos();
     }
     var i: usize = 0;
@@ -234,7 +234,7 @@ pub fn draw(self: *TextArea, event: App.Event) !void {
 
         // Do cursor stuff only on current row
         if ((buf.row == row_index or self.getTermRow() == row_index) and
-            event == .key_press)
+            self.app.curevent == .key_press)
         {
             if (self.use_virtual_cursor or !self.is_focucsed) {
                 win.hideCursor();
@@ -246,7 +246,7 @@ pub fn draw(self: *TextArea, event: App.Event) !void {
         i += 1;
     }
 
-    if (event == .key_press) {
+    if (self.app.curevent == .key_press) {
         var tmp: [64]u8 = undefined;
         const ln_info = try self.getLnInfo(&tmp);
         try self.app.status_bar.setColumnContent(.file_info, ln_info);

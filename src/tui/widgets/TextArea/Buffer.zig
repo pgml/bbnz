@@ -279,11 +279,11 @@ pub const Row = struct {
         });
     }
 
-    pub fn len(self: Row) usize {
+    pub inline fn len(self: Row) usize {
         return self.value.items.len;
     }
 
-    pub fn getValue(self: Row) []Char {
+    pub inline fn getValue(self: Row) []Char {
         return self.value.items;
     }
 
@@ -296,11 +296,11 @@ pub const Row = struct {
         //try self.value.append(self.alloc, char);
     }
 
-    pub fn deleteCharAt(self: *Row, index: usize) void {
+    pub inline fn deleteCharAt(self: *Row, index: usize) void {
         _ = self.value.orderedRemove(index);
     }
 
-    pub fn shrinkAndFree(self: *Row) void {
+    pub inline fn shrinkAndFree(self: *Row) void {
         self.value.shrinkAndFree(self.alloc, self.len());
     }
 

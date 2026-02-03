@@ -19,7 +19,7 @@ default_height: u16 = 1,
 
 win: ?vx.Window = null,
 
-colums: std.AutoHashMap(ColumnPos, *Column),
+columns: std.AutoHashMap(ColumnPos, *Column),
 
 pub const ColumnPos = enum {
     general,
@@ -137,7 +137,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*StatusBar 
         .alloc = alloc,
         .app = app,
         .cell = try .init(self.alloc),
-        .colums = .init(self.alloc),
+        .columns = .init(self.alloc),
     };
 
     self.cell.setHeight(self.default_height);
@@ -156,7 +156,7 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
             }
 
             if (key.matches(vx.Key.enter, .{})) {
-                if (self.colums.getEntry(.general)) |entry| {
+                if (self.columns.getEntry(.general)) |entry| {
                     const col = entry.value_ptr.*;
                     const val = try col.getValueStr();
 
@@ -171,7 +171,7 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
             }
 
             if (key.text) |text| {
-                if (self.colums.getEntry(.general)) |entry| {
+                if (self.columns.getEntry(.general)) |entry| {
                     const col = entry.value_ptr.*;
                     try col.insertSliceAtCursor(text);
                 }
@@ -179,26 +179,26 @@ pub fn update(self: *StatusBar, event: App.Event) !void {
         },
         .update_statusbar => |cnt| {
             const win = self.win orelse return;
-            const entry = self.colums.getEntry(cnt.col) orelse return;
+            const entry = self.columns.getEntry(cnt.col) orelse return;
             entry.value_ptr.*.clear();
             try entry.value_ptr.*.setValue(win, cnt.text);
         },
         .winsize => |ws| {
             var gen_col_w: u16 = 0;
-            if (self.colums.getEntry(.general)) |col| {
+            if (self.columns.getEntry(.general)) |col| {
                 const w = ws.cols - 50;
                 col.value_ptr.*.cell.setWidth(w);
                 gen_col_w = w;
             }
 
             var key_col_w: u16 = 0;
-            if (self.colums.getEntry(.key_info)) |col| {
+            if (self.columns.getEntry(.key_info)) |col| {
                 const w = ws.cols - 50;
                 key_col_w = w;
                 col.value_ptr.*.cell.setOffsetX(gen_col_w);
             }
 
-            if (self.colums.getEntry(.file_info)) |col| {
+            if (self.columns.getEntry(.file_info)) |col| {
                 col.value_ptr.*.cell.setOffsetX(ws.cols - 20);
             }
         },
@@ -219,7 +219,7 @@ pub fn draw(self: *StatusBar, win: vx.Window) !void {
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
 
-    var col_iter = self.colums.iterator();
+    var col_iter = self.columns.iterator();
     while (col_iter.next()) |entry| {
         var content: []const u8 = "";
         const col_pos = entry.key_ptr.*;
@@ -333,14 +333,14 @@ fn getModeStr(self: StatusBar, alloc: std.mem.Allocator) ![]const u8 {
 
 pub fn reset(self: *StatusBar) void {
     self.app.mode = .normal;
-    if (self.colums.getEntry(.general)) |entry| {
+    if (self.columns.getEntry(.general)) |entry| {
         entry.value_ptr.*.clear();
     }
 }
 
 pub fn focus(self: *StatusBar) void {
     self.app.mode = .command;
-    if (self.colums.getEntry(.general)) |entry| {
+    if (self.columns.getEntry(.general)) |entry| {
         entry.value_ptr.*.clear();
     }
     self.cell.focus();
@@ -352,11 +352,11 @@ pub fn blur(self: *StatusBar) void {
 }
 
 pub fn deinit(self: *StatusBar) void {
-    var col_iter = self.colums.iterator();
+    var col_iter = self.columns.iterator();
     while (col_iter.next()) |entry| {
         entry.value_ptr.*.deinit();
         self.alloc.destroy(entry.value_ptr.*);
     }
-    self.colums.deinit();
+    self.columns.deinit();
     self.alloc.destroy(self.cell);
 }

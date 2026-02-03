@@ -130,6 +130,7 @@ pub fn run(self: *App) !void {
             next_frame_ms += tick_ms;
         }
 
+        self.redraw_ui = false;
         try self.runScheduledEvents(@intCast(now));
 
         {
@@ -201,9 +202,9 @@ fn runScheduledEvents(self: *App, now: i64) !void {
 
     for (schedule_events.items) |event| {
         event.cb.func(event.cb.ctx);
-        self.redraw_ui = event.redraw_ui;
         if (event.redraw_ui) {
             try self.draw();
+            self.redraw_ui = true;
         }
     }
 }

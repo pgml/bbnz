@@ -42,7 +42,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
     };
 
     self.cell.setWidth(self.default_width);
-    self.cell.title = title;
+    self.cell.title = try self.alloc.dupe(u8, title);
 
     return self;
 }
@@ -102,20 +102,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
     }
 }
 
-pub fn drawHeader(self: Editor, win: vx.Window, col: u16) !void {
-    var arena = std.heap.ArenaAllocator.init(self.alloc);
-    defer arena.deinit();
-
-    if (self.textarea.hasBuffers()) {
-        const buf: *Buffer = self.textarea.curBuf();
-        if (!std.mem.eql(u8, buf.path, "")) {
-            const breadcrumb = try self.getBreadCrumb(arena.allocator());
-            if (!std.mem.eql(u8, breadcrumb, "")) {
-                self.cell.title = breadcrumb;
-            }
-        }
-    }
-
+pub fn drawHeader(self: *Editor, win: vx.Window, col: u16) !void {
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
 
@@ -137,51 +124,63 @@ pub fn restore(self: *Editor) !void {
 pub fn openBuf(self: *Editor, path: []const u8) !void {
     try self.textarea.openBuf(path);
     self.textarea.repositionView();
+    // get breadcrumb
+    var bc_buf: [256]u8 = undefined;
+    self.alloc.free(self.cell.title);
+    self.cell.title = try self.alloc.dupe(u8, try self.buildBreadCrumb(&bc_buf));
 }
 
-// Remove the root notes directory from the absolute buffer path,
-// Caller owns memory.
-pub fn getRelativeBufPath(self: Editor, alloc: std.mem.Allocator) ![]const u8 {
+// Remove the root notes directory from the absolute buffer path.
+// If `no_file` is true the filename gets removed.
+pub fn getRelativeBufPath(self: Editor, no_file: bool) []const u8 {
     if (self.textarea.hasBuffers()) {
         const buf: *Buffer = self.textarea.curBuf();
-        var rel_path: []u8 = try alloc.alloc(u8, buf.path.len);
-        const notes_root = try self.app.config.getNotesRootDir();
+        const notes_root = self.app.config.getNotesRootDir() catch return "";
 
-        if (std.fs.path.dirname(buf.path)) |dir_name| {
-            const len = dir_name.len - notes_root.len;
-            _ = std.mem.replace(u8, dir_name, notes_root, "", rel_path[0..]);
-            return rel_path[0..len];
+        if (!std.mem.startsWith(u8, buf.path, notes_root)) {
+            return "";
         }
+
+        var rel_path = buf.path[notes_root.len..];
+
+        if (no_file) {
+            if (std.fs.path.dirname(buf.path)) |dir_name| {
+                const len = dir_name.len - notes_root.len;
+                const p: []u8 = @constCast(rel_path);
+                _ = std.mem.replace(u8, dir_name, notes_root, "", p);
+                return rel_path[0..len];
+            }
+        }
+
+        return rel_path;
     }
     return "";
 }
 
-fn getBreadCrumb(self: Editor, alloc: std.mem.Allocator) ![]const u8 {
+fn buildBreadCrumb(self: Editor, out: []u8) ![]const u8 {
     if (!self.textarea.hasBuffers()) {
         return "";
     }
 
     const buf: *Buffer = self.textarea.curBuf();
-    const rel_path = try self.getRelativeBufPath(alloc);
-    const separator = " › ";
+    const rel_path = self.getRelativeBufPath(true);
 
-    if (std.mem.eql(u8, rel_path, "")) {
+    if (rel_path.len == 0) {
         return "";
     }
 
-    var out_buf: [256]u8 = undefined;
-    const replacements = std.mem.replace(u8, rel_path, "/", separator, out_buf[0..]);
+    const separator = " › ";
+
+    var tmp_buf: [256]u8 = undefined;
+    const replacements = std.mem.replace(u8, rel_path, "/", separator, tmp_buf[0..]);
     const len = rel_path.len + (replacements * (separator.len - 1));
 
-    return try std.mem.concat(alloc, u8, &[_][]const u8{
-        " ",
+    return try std.fmt.bufPrint(out, " {s}{s}{s}{s} {s} ", .{
         theme.Icon.getNerd(.dir_closed),
-        out_buf[0..len],
+        tmp_buf[0..len],
         separator,
         theme.Icon.getNerd(.note),
-        " ",
         buf.getName(),
-        " ",
     });
 }
 
@@ -198,6 +197,7 @@ pub fn setFocus(self: *Editor, f: bool) void {
 }
 
 pub fn deinit(self: *Editor) void {
+    self.alloc.free(self.cell.title);
     self.alloc.destroy(self.cell);
     self.textarea.deinit();
 }

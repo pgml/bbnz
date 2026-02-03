@@ -741,7 +741,7 @@ fn closeNote(self: *Input, flags: ?Flags) void {
 
 fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
     _ = flags;
-    if (self.app.status_bar.colums.getEntry(.general)) |entry| {
+    if (self.app.status_bar.columns.getEntry(.general)) |entry| {
         entry.value_ptr.*.deleteCharBefore();
     }
 }

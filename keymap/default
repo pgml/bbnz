@@ -116,7 +116,7 @@ mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
     bind "s"     fn: editor.substituteText                         #todo
     bind "x"     fn: editor.delChar
     bind "p"     fn: editor.paste                                  #todo
-    bind "yy"    fn: editor.yank         flags: [line] #todo
+    bind "yy"    fn: editor.yank         flags: [line]
 
     bind "ge"    fn: editor.prevWord     flags: [end]
     bind "gj"    fn: editor.lineDown     flags: [multiline]        #todo

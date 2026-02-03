@@ -276,14 +276,15 @@ pub fn setupColumns(self: *StatusBar) !void {
 pub fn setColumnContent(self: *StatusBar, col_pos: ColumnPos, text: []const u8) !void {
     const col = self.columns.getEntry(col_pos) orelse return;
     const col_alloc = col.value_ptr.*.alloc;
-    self.app.loop.postEvent(.{ .update_statusbar = .{
+
+    try self.app.custom_events.append(self.alloc, .{ .update_statusbar = .{
         .col = col_pos,
         .text = try col_alloc.dupe(u8, text),
     } });
 }
 
 pub fn clearColumn(self: *StatusBar, column: ColumnPos) !void {
-    self.app.loop.postEvent(.{ .update_statusbar = .{
+    try self.app.custom_events.append(self.alloc, .{ .update_statusbar = .{
         .col = column,
         .text = "",
     } });

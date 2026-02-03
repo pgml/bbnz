@@ -295,7 +295,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
     const textarea: *TextArea = self.textarea;
 
     self.mode = mode;
-    textarea.app.mode = self.mode;
+    textarea.app.setMode(self.mode);
 
     switch (mode) {
         .normal => {
@@ -507,7 +507,7 @@ pub fn cCmd(self: *Vim, flags: ?Input.Flags) void {
     // some delete functions may temporarily slip into other modes.
     self.enterInsertMode(false);
     self.resetSeq();
-    try t.app.status_bar.clearColumn(.key_info);
+    t.app.status_bar.clearColumn(.key_info) catch return;
 }
 
 pub fn dCmd(self: *Vim, flags: ?Input.Flags) void {

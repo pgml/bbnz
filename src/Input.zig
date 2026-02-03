@@ -30,8 +30,6 @@ cur_seq_str: []const u8 = "",
 /// sequence to complete. This is basically `timeoutlen` from Vim.
 seq_timeout: u64 = 300,
 
-seq_generation: std.atomic.Value(u64) = .init(0),
-
 should_reset_seq: u64 = 0,
 
 pub const FlagValue = enum {
@@ -489,9 +487,8 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
     // It should reset itself after a delay, preferably non-blocking.
     if (key.codepoint == 32) {
         key.text = "space";
-        const gen = self.seq_generation.fetchAdd(1, .seq_cst) + 1;
-        const thread = try std.Thread.spawn(.{}, sleep, .{ self, gen });
-        thread.detach();
+
+        self.resetLeader();
     }
 
     // get keybinds from components keymap
@@ -608,15 +605,6 @@ fn isBinding(self: *Input, keys: []const u8) bool {
     return false;
 }
 
-fn sleep(self: *Input, gen: u64) void {
-    std.Thread.sleep(self.seq_timeout * std.time.ns_per_ms);
-    // Only reset if no newer timer was started
-    if (self.seq_generation.load(.seq_cst) == gen) {
-        self.resetKeySeq();
-        self.app.status_bar.clearColumn(.key_info) catch return;
-    }
-}
-
 /// Returns whether `key` is a registered sequence key.
 fn isSeqKey(self: Input, key: []const u8) bool {
     for (self.keymap.seq_keys.items) |k| {
@@ -630,6 +618,27 @@ fn isSeqKey(self: Input, key: []const u8) bool {
 fn resetKeySeq(self: *Input) void {
     self.cur_seq.clearAndFree(self.alloc);
     self.cur_seq = .empty;
+}
+
+fn resetLeader(self: *Input) void {
+    const def_delay: i64 = @intCast(self.seq_timeout);
+
+    const resetFn = struct {
+        fn call(ctx: *anyopaque) void {
+            const s: *Input = @ptrCast(@alignCast(ctx));
+            s.resetKeySeq();
+            s.app.status_bar.clearColumn(.key_info) catch return;
+        }
+    }.call;
+
+    self.app.deferred_events.append(self.alloc, .{
+        .due = std.time.milliTimestamp() + def_delay,
+        .cb = .{
+            .func = resetFn,
+            .ctx = self,
+        },
+        .redraw_ui = true,
+    }) catch return;
 }
 
 fn lineDown(self: *Input, flags: ?Flags) void {
@@ -747,21 +756,35 @@ fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
 }
 
 fn yank(self: *Input, flags: ?Flags) void {
-    var line = false;
-    var from_cursor = false;
     var ta = self.app.editor.textarea;
     //const buf = ta.curBuf();
 
-    if (flags) |f| {
-        line = Input.flagsContain(f, .line);
-        from_cursor = Input.flagsContain(f, .from_cursor);
-    }
+    self.app.status_bar.setColumnContent(.general, "yanking") catch return;
 
-    if (from_cursor) {
+    if (Input.flagsContain(flags, .from_cursor)) {
         // @todo
+    } else if (Input.flagsContain(flags, .line)) {
+        self.app.editor.textarea.vim.setMode(.visual_line);
     } else {
         ta.yankSelection(false) catch return;
     }
+
+    const def_delay: i64 = @intCast(self.app.editor.def_delay);
+    const postYank = struct {
+        fn call(ctx: *anyopaque) void {
+            const t: *TextArea = @ptrCast(@alignCast(ctx));
+            t.yankSelection(true) catch return;
+            t.vim.setMode(.normal);
+        }
+    }.call;
+    self.app.deferred_events.append(self.alloc, .{
+        .due = std.time.milliTimestamp() + def_delay,
+        .cb = .{
+            .func = postYank,
+            .ctx = &self.app.editor.textarea,
+        },
+        .redraw_ui = true,
+    }) catch return;
 }
 
 pub fn deinit(self: *Input) void {

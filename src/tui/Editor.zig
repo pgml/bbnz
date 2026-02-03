@@ -29,6 +29,10 @@ scroll_view: vx.widgets.ScrollView,
 
 textarea: TextArea,
 
+// in ms - delay for going from visual mode to normal mode after
+// yanking stuff
+def_delay: u64 = 100,
+
 pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
     const self = try alloc.create(Editor);
 

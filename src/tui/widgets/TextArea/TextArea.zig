@@ -44,7 +44,7 @@ selection: ?Selection = null,
 /// Holds the previous text value of the current buffer.
 /// Currently used for storing the value before entering any vim mode
 /// that alters the text, so that we can create a reliable history.
-prev_value: []const u8 = "",
+prev_value: []const u8,
 
 pub const Event = union(enum) {
     key_press: Key,
@@ -131,6 +131,7 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
         .buffers = .empty,
         .buffer = 0,
         .vim = try .init(alloc),
+        .prev_value = try alloc.alloc(u8, 0),
     };
 
     return self;
@@ -311,7 +312,8 @@ pub fn writeBuf(self: *TextArea) !usize {
     };
     defer file.close();
 
-    const content = try buf.getString(null);
+    const content = try buf.getString(self.alloc, null);
+    defer self.alloc.free(content);
     const write_buf: []u8 = try self.alloc.alloc(u8, content.len);
     defer self.alloc.free(write_buf);
 
@@ -1184,14 +1186,21 @@ pub fn yankSelection(self: *TextArea, keep_cur_pos: bool) !void {
 pub fn newHistoryEntry(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     buf.history.newTmpEntry(buf.cursorPos());
-    self.prev_value = buf.getString(null) catch return;
+    self.updatePrevVal() catch return;
+}
+
+fn updatePrevVal(self: *TextArea) !void {
+    const buf: *Buffer = self.curBuf();
+    self.alloc.free(self.prev_value);
+    self.prev_value = try buf.getString(self.alloc, null);
 }
 
 /// Updates the history entry saving the undo/redo
 /// patch, the current cursor position and the hash of the buffer content
 pub fn updateHistoryEntry(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
-    const cur_buf_val = try buf.getString(buf.rows.items);
+    const cur_buf_val = try buf.getString(self.alloc, buf.rows.items);
+    defer self.alloc.free(cur_buf_val);
 
     var redo_patch = try buf.history.makePatch(self.prev_value, cur_buf_val);
     defer redo_patch.deinit();
@@ -1199,23 +1208,28 @@ pub fn updateHistoryEntry(self: *TextArea) !void {
     var undo_patch = try buf.history.makePatch(cur_buf_val, self.prev_value);
     defer undo_patch.deinit();
 
+    const hash = try buf.getHash();
+
     try buf.history.updateEntry(
         redo_patch,
         undo_patch,
         buf.cursor_pos,
-        try buf.getHash(),
+        hash,
     );
-    self.prev_value = buf.getString(null) catch return;
+
+    try self.updatePrevVal();
 }
 
 /// Sets the buffer content to the previous history entry.
 pub fn undo(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
-    const patch = buf.history.undo() catch return;
-    const patched = buf.history.dmp.patchApply(
-        patch.patch,
-        buf.getString(null) catch return,
-    ) catch return;
+    var patch = buf.history.undo() catch return;
+    defer patch.patch.deinit();
+
+    const cur_val = buf.getString(self.alloc, null) catch return;
+    defer self.alloc.free(cur_val);
+
+    const patched = buf.history.dmp.patchApply(patch.patch, cur_val) catch return;
 
     buf.setContentFromStr(patched.@"0") catch return;
     self.moveCursorTo(patch.cursor_pos.row, patch.cursor_pos.col);
@@ -1225,11 +1239,14 @@ pub fn undo(self: *TextArea) void {
 // Sets the buffer content to the next history entry.
 pub fn redo(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
-    const patch = buf.history.redo() catch return;
-    const patched = buf.history.dmp.patchApply(
-        patch.patch,
-        buf.getString(null) catch return,
-    ) catch return;
+
+    var patch = buf.history.redo() catch return;
+    defer patch.patch.deinit();
+
+    const prev = buf.getString(self.alloc, null) catch return;
+    defer self.alloc.free(prev);
+
+    const patched = buf.history.dmp.patchApply(patch.patch, prev) catch return;
 
     buf.setContentFromStr(patched.@"0") catch return;
     self.moveCursorTo(patch.cursor_pos.row, patch.cursor_pos.col);
@@ -1248,6 +1265,7 @@ pub fn getTermRow(self: TextArea) usize {
 }
 
 pub fn deinit(self: *TextArea) void {
+    self.alloc.free(self.prev_value);
     for (self.buffers.items) |buffer| {
         buffer.deinit();
         self.alloc.destroy(buffer);

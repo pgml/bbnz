@@ -19,7 +19,6 @@ const HistoryError = error{
     NoUndoEntry,
 };
 
-/// A textarea buffer
 arena: std.heap.ArenaAllocator,
 
 arena_alloc: std.mem.Allocator,
@@ -48,7 +47,7 @@ is_dirty: bool = false,
 
 history: History,
 
-read_buf: []u8 = std.mem.zeroes([]u8),
+file_content: []u8,
 
 cursor_pos: CursorPos = .{},
 
@@ -120,16 +119,18 @@ pub const History = struct {
         // if the current index is lower than the length of all entries
         // truncate the slice to the current index to get rid of all
         // the old entries so the history doesn't get too confusing
+        //
+        // @todo rebuild arena when this hapens (separate arena for history?)
         if (self.numEntries() > 0 and self.entry_index < self.numEntries()) {
             for (@intCast(self.entry_index + 1)..self.numEntries()) |i| {
                 if (i >= self.numEntries()) {
                     continue;
                 }
                 const entry = self.entries.orderedRemove(i);
+                entry.deinit();
                 if (self.numEntries() > 0) {
                     self.entries.shrinkAndFree(self.alloc, self.numEntries() - 1);
                 }
-                entry.deinit();
             }
         }
 
@@ -141,6 +142,7 @@ pub const History = struct {
 
     /// Creates a new persistent history entry from he temporary entry.
     pub fn appendTmpEntry(self: *History) !void {
+        self.tmp_entry.deinit();
         try self.newEntry(self.tmp_entry.undo_cursor_pos);
         self.tmp_entry = .init(self.alloc);
     }
@@ -163,8 +165,14 @@ pub const History = struct {
         var entries = self.entries.items;
         const index: usize = @intCast(self.entry_index);
 
-        entries[index].redo_patch = try self.dmp.patchToText(redo_patch);
-        entries[index].undo_patch = try self.dmp.patchToText(undo_patch);
+        const redo_p = try self.dmp.patchToText(redo_patch);
+        defer self.alloc.free(redo_p);
+
+        const undo_p = try self.dmp.patchToText(undo_patch);
+        defer self.alloc.free(undo_p);
+
+        entries[index].redo_patch = try self.alloc.dupe(u8, redo_p);
+        entries[index].undo_patch = try self.alloc.dupe(u8, undo_p);
         entries[index].redo_cursor_pos = cursor_pos;
         entries[index].hash = hash;
     }
@@ -287,13 +295,34 @@ pub const Row = struct {
         return self.value.items;
     }
 
+    pub inline fn getValueStr(self: Row) ![]const u8 {
+        var row: std.ArrayList(u8) = .empty;
+        for (self.value.items) |char| {
+            try row.append(self.alloc, char.grapheme[0]);
+        }
+        return try row.toOwnedSlice(self.alloc);
+    }
+
+    pub fn eql(self: *Row, cmp: []const u8) bool {
+        var i: usize = 0;
+
+        for (self.value.items) |char| {
+            if (i >= cmp.len) {
+                return false;
+            }
+
+            if (char.grapheme[0] != cmp[i]) {
+                return false;
+            }
+
+            i += 1;
+        }
+
+        return true;
+    }
+
     pub fn appendChar(self: *Row, char: Char) !void {
-        const owned = try self.alloc.dupe(u8, char.grapheme);
-        try self.value.append(self.alloc, .{
-            .grapheme = owned,
-            .width = char.width,
-        });
-        //try self.value.append(self.alloc, char);
+        try self.value.append(self.alloc, char);
     }
 
     pub inline fn deleteCharAt(self: *Row, index: usize) void {
@@ -317,6 +346,7 @@ pub fn init(alloc: std.mem.Allocator) !*Buffer {
         .arena_alloc = self.arena.allocator(),
         .rows = .empty,
         .history = undefined,
+        .file_content = "",
     };
 
     // add first row
@@ -338,26 +368,27 @@ pub fn setPath(self: *Buffer, path: []const u8) void {
 }
 
 pub fn setContentFromStr(self: *Buffer, content: []const u8) !void {
-    self.arena_alloc.free(self.read_buf);
-    self.rows.shrinkAndFree(self.arena_alloc, 0);
-    try self.addRow(0);
-    self.row = 0;
-    self.col = 0;
-
     var iter = std.mem.splitAny(u8, content, "\n");
     var i: usize = 0;
 
     while (iter.next()) |line| {
-        defer i += 1;
-
-        if (i > 0) {
-            try self.addRow(0);
+        if (i >= self.rows.items.len) {
+            continue;
         }
 
-        var g_iter = vx.unicode.graphemeIterator(line);
+        var cur_row = self.rows.items[i];
+        i += 1;
 
+        if (cur_row.eql(line)) {
+            continue;
+        }
+
+        //_ = cur_row.arena.reset(.retain_capacity);
+        cur_row.value.clearRetainingCapacity();
+
+        var g_iter = vx.unicode.graphemeIterator(line);
         while (g_iter.next()) |g| {
-            try self.curRow().appendChar(.{
+            try cur_row.appendChar(.{
                 .grapheme = g.bytes(line),
                 .width = 1,
             });
@@ -377,12 +408,12 @@ pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
         return;
     }
 
-    self.read_buf = try self.arena_alloc.alloc(u8, size);
-    var reader = file.reader(self.read_buf);
+    self.file_content = try self.arena_alloc.alloc(u8, size);
+    var reader = file.reader(self.file_content);
     var i: usize = 0;
 
-    try reader.interface.readSliceAll(self.read_buf);
-    var lines = std.mem.splitAny(u8, self.read_buf, "\n");
+    try reader.interface.readSliceAll(self.file_content);
+    var lines = std.mem.splitAny(u8, self.file_content, "\n");
 
     while (lines.next()) |line| {
         defer i += 1;
@@ -455,14 +486,14 @@ pub fn splitRow(self: *Buffer) !void {
     }
 }
 
-pub fn getString(self: *Buffer, rows: ?[]*Row) ![]u8 {
+pub fn getString(self: *Buffer, alloc: std.mem.Allocator, rows: ?[]*Row) ![]u8 {
     var items = self.rows.items;
     if (rows != null) {
         items = rows.?;
     }
 
     const total = self.totalByteLen(items) - 1;
-    var buffer = try self.arena_alloc.alloc(u8, total);
+    var buffer = try alloc.alloc(u8, total);
     var index: usize = 0;
     var row_index = index;
 
@@ -502,8 +533,10 @@ fn totalByteLen(self: *Buffer, rows: []const *Row) usize {
 }
 
 pub fn getHash(self: *Buffer) !u64 {
-    const str = try self.getString(null);
-    return fastHash(str);
+    const str = try self.getString(self.arena_alloc, null);
+    defer self.arena_alloc.free(str);
+    const hash = fastHash(str);
+    return hash;
 }
 
 /// Returns a reference to the current row.
@@ -524,13 +557,12 @@ pub fn updateCursorPos(self: *Buffer) void {
     self.cursor_pos.row = self.row;
     self.cursor_pos.row_offset = self.row_offset;
 }
+
 pub fn shrinkAndFree(self: *Buffer) void {
     self.rows.shrinkAndFree(self.arena_alloc, self.numRows());
 }
 
 pub fn deinit(self: *Buffer) void {
-    self.history.deinit();
-    self.arena_alloc.free(self.read_buf);
     self.arena.deinit();
 }
 

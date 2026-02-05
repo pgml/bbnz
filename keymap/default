@@ -161,6 +161,9 @@ mode normal(Editor) {
     bind "dw"    fn: editor.delete       flags: [from_cursor,word]
     bind "daw"   fn: editor.delete       flags: [word,outer]
     bind "diw"   fn: editor.delete       flags: [word]
+    bind "yw"   fn: editor.yank          flags: [word,from_cursor]
+    bind "yaw"   fn: editor.yank         flags: [word,outer]
+    bind "yiw"   fn: editor.yank         flags: [word]
 
     bind "C-r"   fn: editor.redo
 }

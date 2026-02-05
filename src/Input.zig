@@ -755,10 +755,27 @@ fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
 
 fn yank(self: *Input, flags: ?Flags) void {
     var ta = self.app.editor.textarea;
+    const buf = ta.curBuf();
 
     self.app.status_bar.setColumnContent(.general, "yanking") catch return;
 
-    if (Input.flagsContain(flags, .line)) {
+    if (Input.flagsContain(flags, .word)) {
+        var start_word_col = ta.getFirstColumnOfWord();
+        var end_word_col = ta.getLastColumnOfWord();
+
+        if (Input.flagsContain(flags, .from_cursor)) {
+            start_word_col = buf.col;
+        } else if (Input.flagsContain(flags, .outer)) {
+            end_word_col += 1;
+        }
+
+        ta.setCursorCol(start_word_col);
+        buf.updateCursorPos();
+        ta.selectRange(buf.cursorPos(), .{
+            .row = buf.row,
+            .col = end_word_col,
+        });
+    } else if (Input.flagsContain(flags, .line)) {
         if (Input.flagsContain(flags, .from_cursor)) {
             ta.vim.setMode(.visual);
             ta.lineEnd();

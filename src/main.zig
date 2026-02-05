@@ -26,14 +26,20 @@ pub fn main() !void {
     try log.init(alloc);
     defer log.deinit();
 
-    //const args = try std.process.argsAlloc(alloc);
-    //defer std.process.argsFree(alloc, args);
+    var proc_args = try std.process.argsWithAllocator(alloc);
+    defer proc_args.deinit();
 
-    //for (args) |arg| {
-    //    std.debug.print("  {s}\n", .{arg});
-    //}
+    var args: std.StringHashMap(?[]const u8) = .init(alloc);
+    defer args.deinit();
 
-    var app = try App.init(alloc);
+    while (proc_args.next()) |arg| {
+        const a: []const u8 = arg;
+        var key_val = std.mem.splitAny(u8, a, "=");
+        try args.put(key_val.first()[2..], key_val.next());
+    }
+
+    var app = try App.init(alloc, args);
+
     defer app.deinit();
     try app.run();
 }

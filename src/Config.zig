@@ -18,6 +18,17 @@ alloc: std.mem.Allocator,
 
 meta_infos: *MetaInfos,
 
+/// Doesn't enter alternate screen.
+@"no-alt": bool = false,
+
+/// Use a virtual cursor instead of the native cursor provided by the
+/// terminal.
+/// In future update this will be more meaningful as different app modes
+/// will have different cursor colours and/or shapes.
+//
+// @todo: do what I said above
+@"virtual-cursor": bool = false,
+
 pub const MetaInfos = struct {
     arena: std.heap.ArenaAllocator,
 

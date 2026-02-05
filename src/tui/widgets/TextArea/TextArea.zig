@@ -132,6 +132,7 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
         .buffer = 0,
         .vim = try .init(alloc),
         .prev_value = try alloc.alloc(u8, 0),
+        .use_virtual_cursor = app.config.@"virtual-cursor",
     };
 
     return self;

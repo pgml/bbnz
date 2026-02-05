@@ -72,10 +72,10 @@ pub const DeferredEvent = struct {
     redraw_ui: bool = false,
 };
 
-pub fn init(alloc: std.mem.Allocator) !App {
+pub fn init(alloc: std.mem.Allocator, args_map: std.StringHashMap(?[]const u8)) !App {
     var buffer: [1024]u8 = undefined;
 
-    return .{
+    var self: App = .{
         .alloc = alloc,
         .config = try .init(alloc),
         .input = try .init(alloc),
@@ -87,6 +87,10 @@ pub fn init(alloc: std.mem.Allocator) !App {
         .editor = undefined,
         .status_bar = undefined,
     };
+
+    self.resolveArgs(args_map);
+
+    return self;
 }
 
 pub fn run(self: *App) !void {
@@ -97,11 +101,12 @@ pub fn run(self: *App) !void {
         .tty = &self.tty,
     };
     try self.loop.init();
-
     try self.loop.start();
     defer self.loop.stop();
 
-    try self.vx.enterAltScreen(writer);
+    if (!self.config.@"no-alt") {
+        try self.vx.enterAltScreen(writer);
+    }
 
     self.directory_tree = try .init(self.alloc, "Folders", self);
     self.notes_list = try .init(self.alloc, "Notes", self);
@@ -351,4 +356,13 @@ pub fn deinit(self: *App) void {
 
     self.vx.deinit(self.alloc, self.tty.writer());
     self.tty.deinit();
+}
+
+fn resolveArgs(self: *App, args_map: std.StringHashMap(?[]const u8)) void {
+    if (args_map.getEntry("no-alt")) |_| {
+        self.config.@"no-alt" = true;
+    }
+    if (args_map.getEntry("virtual-cursor")) |_| {
+        self.config.@"virtual-cursor" = true;
+    }
 }

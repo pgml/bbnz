@@ -102,7 +102,7 @@ mode normal(Editor), visual(Editor), visual_line(Editor), visual_block(Editor) {
     bind "G"     fn: editor.goToBottom
     bind "J"     fn: editor.mergeLines
     bind "V"     fn: editor.toggleVisualMode   flags: [line]
-    bind "Y"     fn: editor.yank               flags: [end]   #todo
+    bind "Y"     fn: editor.yank               flags: [from_cursor,line]
 
     bind "b"     fn: editor.prevWord
     bind "e"     fn: editor.nextWord     flags: [end]
@@ -151,14 +151,14 @@ mode normal(Editor) {
     bind "cj"    fn: editor.change       flags: [line,below]
     bind "ck"    fn: editor.change       flags: [line,above]
     bind "cf"    fn: editor.changeCurToChar  flags: [op, await, incl]  #todo
-    bind "cw"    fn: editor.change       flags: [remaining,word]
+    bind "cw"    fn: editor.change       flags: [from_cursor,word]
     bind "caw"   fn: editor.change       flags: [word,outer]
     bind "ciw"   fn: editor.change       flags: [word]
     bind "dd"    fn: editor.delete       flags: [line]
     bind "dj"    fn: editor.delete       flags: [line,below]
     bind "dk"    fn: editor.delete       flags: [line,above]
     bind "df"    fn: editor.deleteCurToChar  flags: [op, await, incl]  #todo
-    bind "dw"    fn: editor.delete       flags: [remaining,word]
+    bind "dw"    fn: editor.delete       flags: [from_cursor,word]
     bind "daw"   fn: editor.delete       flags: [word,outer]
     bind "diw"   fn: editor.delete       flags: [word]
 

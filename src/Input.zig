@@ -44,7 +44,6 @@ pub const FlagValue = enum {
     outer,
     above,
     below,
-    remaining,
     selection,
 };
 
@@ -444,7 +443,6 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "outer")) flag = .outer;
         if (std.mem.eql(u8, flag_str, "above")) flag = .above;
         if (std.mem.eql(u8, flag_str, "below")) flag = .below;
-        if (std.mem.eql(u8, flag_str, "remaining")) flag = .remaining;
         if (std.mem.eql(u8, flag_str, "selection")) flag = .selection;
         return flag;
     }
@@ -757,14 +755,16 @@ fn statusBarDeleteBefore(self: *Input, flags: ?Flags) void {
 
 fn yank(self: *Input, flags: ?Flags) void {
     var ta = self.app.editor.textarea;
-    //const buf = ta.curBuf();
 
     self.app.status_bar.setColumnContent(.general, "yanking") catch return;
 
-    if (Input.flagsContain(flags, .from_cursor)) {
-        // @todo
-    } else if (Input.flagsContain(flags, .line)) {
-        self.app.editor.textarea.vim.setMode(.visual_line);
+    if (Input.flagsContain(flags, .line)) {
+        if (Input.flagsContain(flags, .from_cursor)) {
+            ta.vim.setMode(.visual);
+            ta.lineEnd();
+        } else {
+            ta.vim.setMode(.visual_line);
+        }
     } else {
         ta.yankSelection(false) catch return;
     }
@@ -773,8 +773,10 @@ fn yank(self: *Input, flags: ?Flags) void {
     const postYank = struct {
         fn call(ctx: *anyopaque) void {
             const t: *TextArea = @ptrCast(@alignCast(ctx));
-            t.yankSelection(true) catch return;
-            t.vim.setMode(.normal);
+            t.yankSelection(false) catch return;
+            // dirty hack to trigger a redraw to put the cursor back to the
+            // original position, this can be done better but it works for now.
+            t.app.input.noop() catch return;
         }
     }.call;
     self.app.deferred_events.append(self.alloc, .{
@@ -785,6 +787,14 @@ fn yank(self: *Input, flags: ?Flags) void {
         },
         .redraw_ui = true,
     }) catch return;
+}
+
+/// Stupid function just to trigger a redraw.
+/// @todo find a better way
+pub fn noop(self: *Input) !void {
+    try self.app.custom_events.append(self.app.alloc, .{ .key_press = .{
+        .codepoint = vx.Key.escape,
+    } });
 }
 
 pub fn deinit(self: *Input) void {

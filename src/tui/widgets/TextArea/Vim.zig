@@ -553,7 +553,7 @@ fn delWordActions(self: *Vim, flags: ?Input.Flags) void {
     const t = self.textarea;
     const buf = t.curBuf();
 
-    if (Input.flagsContain(flags, .remaining)) {
+    if (Input.flagsContain(flags, .from_cursor)) {
         const end_word = t.getLastColumnOfWord();
         t.selectRange(buf.cursorPos(), .{
             .row = buf.row,

@@ -180,8 +180,11 @@ pub const History = struct {
         const undo_p = try self.dmp.patchToText(undo_patch);
         defer self.alloc.free(undo_p);
 
-        entries[index].redo_patch = try self.alloc.dupe(u8, redo_p);
-        entries[index].undo_patch = try self.alloc.dupe(u8, undo_p);
+        var entry_alloc = entries[index].alloc;
+        entries[index].deinit();
+        entries[index].redo_patch = try entry_alloc.dupe(u8, redo_p);
+        entries[index].undo_patch = try entry_alloc.dupe(u8, undo_p);
+
         entries[index].redo_cursor_pos = cursor_pos;
         entries[index].hash = hash;
     }
@@ -492,6 +495,11 @@ pub fn splitRow(self: *Buffer) !void {
     for (after_cursor_cp) |char| {
         try self.curRow().appendChar(char);
     }
+}
+
+pub fn updatePrevVal(self: *Buffer) !void {
+    self.alloc.free(self.prev_value);
+    self.prev_value = try self.getString(self.alloc, null);
 }
 
 pub fn getString(self: *Buffer, alloc: std.mem.Allocator, rows: ?[]*Row) ![]u8 {

@@ -271,6 +271,7 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     buf.setIndex(self.numBufs() - 1);
 
     try buf.setContentFromFile(path);
+    try buf.updatePrevVal();
 
     self.buffer = self.numBufs() + 1;
     self.goToTop();
@@ -1181,13 +1182,7 @@ pub fn yankSelection(self: *TextArea, keep_cur_pos: bool) !void {
 pub fn newHistoryEntry(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
     buf.history.newTmpEntry(buf.cursorPos());
-    self.updatePrevVal() catch return;
-}
-
-fn updatePrevVal(self: *TextArea) !void {
-    const buf: *Buffer = self.curBuf();
-    self.alloc.free(buf.prev_value);
-    buf.prev_value = try buf.getString(self.alloc, null);
+    buf.updatePrevVal() catch return;
 }
 
 /// Updates the history entry saving the undo/redo
@@ -1212,7 +1207,7 @@ pub fn updateHistoryEntry(self: *TextArea) !void {
         hash,
     );
 
-    try self.updatePrevVal();
+    try buf.updatePrevVal();
 }
 
 /// Sets the buffer content to the previous history entry.

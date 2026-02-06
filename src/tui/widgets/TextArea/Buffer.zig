@@ -67,8 +67,6 @@ pub const CursorPos = struct {
 
 // @todo, undo and redoing patches fills memory
 pub const History = struct {
-    arena: std.heap.ArenaAllocator,
-
     alloc: std.mem.Allocator,
 
     // EntryIndex is the current index in the history
@@ -101,6 +99,9 @@ pub const History = struct {
             return .{ .alloc = alloc };
         }
 
+        // This should only be called for entries that where committed to the
+        // history. Never call this on a `tmp_entry`.
+        // Committed entries always own allocated redo_patch and undo_patch.
         pub fn deinit(self: Entry) void {
             self.alloc.free(self.redo_patch);
             self.alloc.free(self.undo_patch);
@@ -110,8 +111,7 @@ pub const History = struct {
     pub fn init(alloc: std.mem.Allocator) !*History {
         const self = try alloc.create(History);
         self.* = .{
-            .arena = .init(alloc),
-            .alloc = self.arena.allocator(),
+            .alloc = alloc,
             .tmp_entry = try .init(self.alloc),
             .dmp = .init(self.alloc),
         };
@@ -128,21 +128,14 @@ pub const History = struct {
     pub fn newEntry(self: *History, cursor_pos: CursorPos) !void {
         // if the current index is lower than the length of all entries
         // truncate the slice to the current index to get rid of all
-        // the old entries so the history doesn't get too confusing
-        //
-        // @todo rebuild arena when this hapens
-        if (self.numEntries() > 0 and self.entry_index < self.numEntries()) {
+        // the old entries and free the obsolete entrie's memory
+        // so the history doesn't get too confusing.
+        if (self.entry_index + 1 < self.numEntries()) {
             for (@intCast(self.entry_index + 1)..self.numEntries()) |i| {
-                if (i >= self.numEntries()) {
-                    continue;
-                }
-                const entry = self.entries.orderedRemove(i);
-                entry.deinit();
-                if (self.numEntries() > 0) {
-                    self.entries.shrinkAndFree(self.alloc, self.numEntries() - 1);
-                }
+                self.entries.items[i].deinit();
             }
         }
+        self.entries.shrinkAndFree(self.alloc, @intCast(self.entry_index + 1));
 
         self.tmp_entry.undo_cursor_pos = cursor_pos;
         try self.entries.append(self.alloc, self.tmp_entry);
@@ -259,7 +252,10 @@ pub const History = struct {
     }
 
     pub fn deinit(self: *History) void {
-        self.arena.deinit();
+        for (self.entries.items) |entry| {
+            entry.deinit();
+        }
+        self.entries.deinit(self.alloc);
     }
 };
 
@@ -419,6 +415,7 @@ pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
     }
 
     self.file_content = try self.alloc.alloc(u8, size);
+    self.current_patch = try self.alloc.alloc(u8, size);
     self.prev_value = try self.alloc.alloc(u8, size);
     var reader = file.reader(self.file_content);
     var i: usize = 0;
@@ -591,7 +588,6 @@ pub fn deinit(self: *Buffer) void {
 
     self.history.deinit();
     self.alloc.destroy(self.history);
-    //self.arena.deinit();
 }
 
 pub fn hashStr(str: []const u8) [Sha256.digest_length]u8 {

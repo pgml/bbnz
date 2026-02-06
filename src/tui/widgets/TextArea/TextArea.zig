@@ -354,6 +354,9 @@ pub fn enableVimMode(self: *TextArea) !void {
 }
 
 /// Insert text at the cursor position
+///
+/// @todo introduce draw cache, don't do utf8 grapheme, width stuff at
+/// keypress
 pub fn insertSliceAtCursor(self: *TextArea, data: []const u8) !void {
     const buf: *Buffer = self.curBuf();
     var cur_row = buf.curRow();
@@ -1220,6 +1223,8 @@ pub fn undo(self: *TextArea) void {
     defer self.alloc.free(cur_val);
 
     const patched = buf.history.dmp.patchApply(patch.patch, cur_val) catch return;
+    defer self.alloc.free(patched.@"0");
+    defer self.alloc.free(patched.@"1");
 
     buf.setContentFromStr(patched.@"0") catch return;
     self.moveCursorTo(patch.cursor_pos.row, patch.cursor_pos.col);
@@ -1237,6 +1242,8 @@ pub fn redo(self: *TextArea) void {
     defer self.alloc.free(prev);
 
     const patched = buf.history.dmp.patchApply(patch.patch, prev) catch return;
+    defer self.alloc.free(patched.@"0");
+    defer self.alloc.free(patched.@"1");
 
     buf.setContentFromStr(patched.@"0") catch return;
     self.moveCursorTo(patch.cursor_pos.row, patch.cursor_pos.col);

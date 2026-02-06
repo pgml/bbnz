@@ -41,11 +41,6 @@ use_virtual_cursor: bool = false,
 
 selection: ?Selection = null,
 
-/// Holds the previous text value of the current buffer.
-/// Currently used for storing the value before entering any vim mode
-/// that alters the text, so that we can create a reliable history.
-prev_value: []const u8,
-
 pub const Event = union(enum) {
     key_press: Key,
 };
@@ -131,7 +126,6 @@ pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
         .buffers = .empty,
         .buffer = 0,
         .vim = try .init(alloc),
-        .prev_value = try alloc.alloc(u8, 0),
         .use_virtual_cursor = app.config.@"virtual-cursor",
     };
 
@@ -272,7 +266,7 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     try self.buffers.append(self.alloc, try .init(self.alloc));
     var buf: *Buffer = self.buffers.getLast();
     // use the arena from the buffer since the history is tied to it.
-    buf.history = try .init(buf.arena_alloc);
+    buf.history = try .init(buf.alloc);
     buf.setPath(path);
     buf.setIndex(self.numBufs() - 1);
 
@@ -1192,8 +1186,8 @@ pub fn newHistoryEntry(self: *TextArea) void {
 
 fn updatePrevVal(self: *TextArea) !void {
     const buf: *Buffer = self.curBuf();
-    self.alloc.free(self.prev_value);
-    self.prev_value = try buf.getString(self.alloc, null);
+    self.alloc.free(buf.prev_value);
+    buf.prev_value = try buf.getString(self.alloc, null);
 }
 
 /// Updates the history entry saving the undo/redo
@@ -1203,10 +1197,10 @@ pub fn updateHistoryEntry(self: *TextArea) !void {
     const cur_buf_val = try buf.getString(self.alloc, buf.rows.items);
     defer self.alloc.free(cur_buf_val);
 
-    var redo_patch = try buf.history.makePatch(self.prev_value, cur_buf_val);
+    var redo_patch = try buf.history.makePatch(buf.prev_value, cur_buf_val);
     defer redo_patch.deinit();
 
-    var undo_patch = try buf.history.makePatch(cur_buf_val, self.prev_value);
+    var undo_patch = try buf.history.makePatch(cur_buf_val, buf.prev_value);
     defer undo_patch.deinit();
 
     const hash = try buf.getHash();
@@ -1266,7 +1260,6 @@ pub fn getTermRow(self: TextArea) usize {
 }
 
 pub fn deinit(self: *TextArea) void {
-    self.alloc.free(self.prev_value);
     for (self.buffers.items) |buffer| {
         buffer.deinit();
         self.alloc.destroy(buffer);

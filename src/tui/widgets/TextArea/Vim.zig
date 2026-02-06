@@ -299,7 +299,7 @@ pub fn setMode(self: *Vim, mode: Mode) void {
 
     switch (mode) {
         .normal => {
-            const last_hash = Buffer.fastHash(textarea.prev_value);
+            const last_hash = Buffer.fastHash(buf.prev_value);
             const buf_hash = buf.getHash() catch return;
 
             // only update if there's a change otherwise

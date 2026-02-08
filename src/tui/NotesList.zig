@@ -143,7 +143,8 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
     }
 }
 
-pub fn drawHeader(self: NotesList, win: vx.Window, col: u16) void {
+pub fn drawHeader(self: NotesList, win: vx.Window) void {
+    const col: u16 = @intCast(self.cell.offset_x + 1);
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
 

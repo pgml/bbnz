@@ -37,7 +37,7 @@ last_column: u16 = 0,
 
 mode: Editor.TextArea.Vim.Mode = .normal,
 
-win: vaxis.Window = undefined,
+win: ?vaxis.Window = null,
 
 loop: vaxis.Loop(Event) = undefined,
 
@@ -158,6 +158,7 @@ pub fn run(self: *App) !void {
         if (self.redraw_ui) {
             try self.vx.render(writer);
             try writer.flush();
+            self.redraw_ui = false;
         }
     }
 }
@@ -182,8 +183,19 @@ pub fn update(self: *App, event: Event) !void {
 pub fn draw(self: *App) !void {
     var win: vaxis.Window = self.vx.window();
     win.clear();
-    try self.initComponents(win);
     self.win = win;
+
+    try self.initComponents();
+    self.directory_tree.draw(win);
+    self.directory_tree.drawHeader(win, 1);
+
+    self.notes_list.draw(win);
+    self.notes_list.drawHeader(win);
+
+    self.editor.draw(win);
+    try self.editor.drawHeader(win);
+
+    try self.status_bar.draw(win);
 }
 
 /// Collects and runs all deferred events at a specific time.
@@ -222,29 +234,24 @@ fn restoreState(self: *App) !void {
     self.focusColumn(@intCast(self.config.meta_infos.current_column));
 }
 
-fn initComponents(self: *App, win: vaxis.Window) !void {
+/// prepares all components for rendering, sets dimensions and offsets...
+fn initComponents(self: *App) !void {
+    const win = self.win orelse return;
     const sb_height = self.status_bar.cell.height;
 
     self.directory_tree.cell.setHeight(win.height - sb_height);
     self.directory_tree.cell.setOffsetY(0);
-    self.directory_tree.draw(win);
-    self.directory_tree.drawHeader(win, 1);
 
     self.notes_list.cell.setHeight(win.height - sb_height);
     self.notes_list.cell.setOffsetY(0);
     self.notes_list.cell.setOffsetX(self.directory_tree.cell.width);
-    self.notes_list.draw(win);
-    self.notes_list.drawHeader(win, self.directory_tree.cell.width + 1);
 
-    const editor_xoff = self.notes_list.cell.width + self.directory_tree.cell.width;
+    const xoff = self.notes_list.cell.width + self.directory_tree.cell.width;
     self.editor.cell.setHeight(win.height - sb_height);
     self.editor.cell.setOffsetY(0);
-    self.editor.cell.setOffsetX(editor_xoff);
-    self.editor.draw(win);
-    try self.editor.drawHeader(win, editor_xoff + 1);
+    self.editor.cell.setOffsetX(xoff);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);
-    try self.status_bar.draw(win);
 }
 
 pub fn focusColumn(self: *App, index: u16) void {

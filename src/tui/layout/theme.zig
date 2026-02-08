@@ -2,6 +2,8 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 pub const Color = struct {
+    pub const default_fg: vx.Color = .{ .rgb = .{ 240, 240, 240 } };
+
     pub const Border = struct {
         pub const fg: vx.Color = .{ .rgb = .{ 96, 109, 135 } };
         pub const fg_focused: vx.Color = .{ .rgb = .{ 105, 200, 220 } };
@@ -9,15 +11,17 @@ pub const Color = struct {
 
     pub const CellHeader = struct {
         pub const fg: vx.Color = Color.Border.fg;
-        pub const fg_focused: vx.Color = .{ .rgb = .{ 240, 240, 240 } };
+        pub const fg_focused: vx.Color = Color.default_fg;
     };
 
-    pub const LineNumber = struct {
-        pub const fg: vx.Color = .{ .rgb = .{ 110, 110, 110 } };
+    pub const Editor = struct {
+        pub const selection_bg: vx.Color = .{ .rgb = .{ 68, 76, 85 } };
+        pub const line_number_fg: vx.Color = .{ .rgb = .{ 110, 110, 110 } };
     };
 
-    pub const Selection = struct {
-        pub const bg: vx.Color = .{ .rgb = .{ 68, 76, 85 } };
+    pub const List = struct {
+        pub const selection_bg: vx.Color = .{ .rgb = .{ 66, 75, 93 } };
+        pub const toggle_fg: vx.Color = .{ .rgb = .{ 96, 109, 135 } };
     };
 };
 

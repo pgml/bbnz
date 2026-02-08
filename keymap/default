@@ -42,7 +42,7 @@ mode search {
 mode normal(Folders, Notes) {
     bind "j"     fn: lineDown
     bind "k"     fn: lineUp
-    bind "R"     fn: renameListItem       #todo
+    bind "R"     fn: listitem.rename
     bind "D"     fn: delListItem          #todo
     bind "P"     fn: togglePinListItem    #todo
     bind "yy"    fn: yankListItem         #todo
@@ -52,8 +52,12 @@ mode normal(Folders, Notes) {
 }
 
 mode insert(Folders, Notes) {
-    bind "enter"    fn: confirmAction  #todo
-    bind "esc"      fn: cancelAction   #todo
+    bind "left"        fn: listitem.cursorLeft
+    bind "right"       fn: listitem.cursorRight
+    bind "backspace"   fn: listitem.delChar         flags: [before]
+    bind "delete"      fn: listitem.delChar         flags: [after]    #todo
+    bind "enter"       fn: listitem.confirmEdit
+    bind "esc"         fn: listitem.cancelEdit
 }
 
 # —————————————————————————————————————————————————————————————————————————————

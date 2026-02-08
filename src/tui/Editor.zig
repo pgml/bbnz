@@ -91,7 +91,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
         const ln: vx.widgets.LineNumbers = .{
             .num_lines = buf.numRows() +| 1,
             .style = .{
-                .fg = theme.Color.LineNumber.fg,
+                .fg = theme.Color.Editor.line_number_fg,
             },
         };
 

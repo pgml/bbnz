@@ -205,7 +205,7 @@ pub fn draw(self: *TextArea) !void {
                 selection.mode = self.app.mode;
                 selection.cur_pos = buf.cursor_pos;
                 if (selection.isInRange(row_index, col)) {
-                    style.bg = Theme.Color.Selection.bg;
+                    style.bg = Theme.Color.Editor.selection_bg;
                 }
             }
 
@@ -223,7 +223,7 @@ pub fn draw(self: *TextArea) !void {
             if (self.selection.?.isInRange(row_index, col)) {
                 view.writeCell(win, col, row_index, .{
                     .char = .{ .grapheme = " ", .width = 1 },
-                    .style = .{ .bg = Theme.Color.Selection.bg },
+                    .style = .{ .bg = Theme.Color.Editor.selection_bg },
                 });
             }
         }

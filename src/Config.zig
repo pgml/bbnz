@@ -178,10 +178,7 @@ pub const MetaInfos = struct {
         const val_type_info = @typeInfo(ValType);
 
         switch (val_type_info) {
-            .int,
-            .float,
-            .bool,
-            => {
+            .int, .float, .bool => {
                 if (opt == .current_column) {
                     self.current_column = val;
                 }
@@ -189,9 +186,11 @@ pub const MetaInfos = struct {
             .pointer => |ptr| {
                 if (ptr.child == u8) {
                     if (opt == .last_directory) {
-                        self.last_directory = val;
+                        self.alloc.free(self.last_directory);
+                        self.last_directory = try self.alloc.dupe(u8, val);
                     } else if (opt == .last_open_note) {
-                        self.last_open_note = val;
+                        self.alloc.free(self.last_open_note);
+                        self.last_open_note = try self.alloc.dupe(u8, val);
                     }
                 }
             },

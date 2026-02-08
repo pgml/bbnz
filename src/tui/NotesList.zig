@@ -7,7 +7,7 @@ const App = @import("../App.zig");
 const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
 const Cell = @import("layout/Cell.zig");
 const fs = @import("../fs.zig");
-const ListItem = @import("ListItem.zig");
+const List = @import("List.zig");
 const theme = @import("layout/theme.zig");
 const Icon = theme.Icon;
 const utils = @import("../utils.zig");
@@ -16,6 +16,8 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
+/// The name of the DirectoryTree.
+/// We use this as the default column title.
 name: []const u8 = "",
 
 /// The layout cell/column
@@ -52,9 +54,11 @@ scroll_view: vx.widgets.ScrollView,
 
 win: ?vx.Window = null,
 
+is_insert: bool = false,
+
 pub const NoteItem = struct {
     /// General list data
-    data: ListItem,
+    data: List.Item,
 
     cell: *Cell,
 
@@ -65,9 +69,9 @@ pub const NoteItem = struct {
     toggle_arrow: []const u8 = "",
 
     pub fn deinit(self: *NoteItem, alloc: std.mem.Allocator) void {
-        alloc.free(self.data.name);
         alloc.free(self.data.path);
         alloc.destroy(self.cell);
+        self.data.deinit(alloc);
     }
 };
 
@@ -91,13 +95,19 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
 pub fn update(self: *NotesList, event: App.Event) !void {
     switch (event) {
         .key_press => |key| {
-            _ = key;
-            if (!self.cell.isFocused()) {
+            if (!self.cell.isFocused() or self.app.mode != .insert) {
                 return;
+            }
+
+            if (self.is_insert) {
+                const note = self.selectedNote() orelse return;
+                try note.data.input(key, self.alloc);
             }
         },
         else => {},
     }
+
+    self.is_insert = self.app.mode == .insert and self.cell.isFocused();
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
@@ -119,13 +129,17 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
         var style: vx.Cell.Style = .{};
         if (index == self.selected_index) {
-            style.bg = .{ .rgb = .{ 66, 75, 93 } };
+            style.bg = theme.Color.List.selection_bg;
         }
 
         const row: u16 = @intCast(index + item.cell.height - 1);
         self.writeLine(item, row, self.cell.width, style);
-        index += 1;
         item.data.index = @intCast(index);
+        index += 1;
+
+        if (item.data.edit_pos) |pos| {
+            self.win.?.showCursor(pos.col, pos.row);
+        }
     }
 }
 
@@ -135,18 +149,39 @@ pub fn drawHeader(self: NotesList, win: vx.Window, col: u16) void {
 
 fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
+    var w: usize = 0;
 
     if (self.win) |win| {
-        Cell.write(win, &col, row, " ", style);
-        Cell.write(win, &col, row, Icon.getNerd(.note), style);
-        Cell.write(win, &col, row, " ", style);
-        Cell.write(win, &col, row, item.data.name, style);
+        Cell.writeStr(win, &col, row, " ", style);
+
+        var note_icon = Icon.getNerd(.note);
+        if (self.selectedNote()) |note| {
+            if (self.is_insert and note == item) {
+                note_icon = Icon.getNerd(.pen);
+            }
+        }
+        Cell.writeStr(win, &col, row, note_icon, style);
+        Cell.writeStr(win, &col, row, " ", style);
+
+        // switch to input value when we're renaming
+        if (self.is_insert and item.data.edit_pos != null) {
+            for (item.data.input_val.items) |char| {
+                win.writeCell(col, row, Cell.get(char.grapheme, char.width, style));
+                col += 1;
+            }
+        } else {
+            Cell.writeStr(win, &col, row, item.data.name, style);
+        }
+
+        w = col;
 
         // pad the rest of the line to make the selection expand to the whole row
         while (col < width) {
-            Cell.write(win, &col, row, " ", style);
+            Cell.writeStr(win, &col, row, " ", style);
         }
     }
+
+    item.data.width = @intCast(w);
 }
 
 pub fn restore(self: *NotesList) !void {
@@ -204,7 +239,49 @@ fn getListItem(self: NotesList, index: usize) ?*NoteItem {
     return self.note_items.items[index];
 }
 
-fn selectedNote(self: NotesList) ?*NoteItem {
+/// Prepares a list item for editing.
+/// Sets app into insert mode and stores the initial target cursor position
+/// for the item.
+pub fn initEditListItem(self: *NotesList) !void {
+    const note = self.selectedNote() orelse return;
+    try note.data.edit(self.alloc, self.win);
+    self.app.setMode(.insert);
+}
+
+/// Confirms the edited list item.
+/// Renames the edited item on the operating system and updates
+/// the meta info file if necessary.
+pub fn confirmEdit(self: *NotesList) !void {
+    const note = self.selectedNote() orelse return;
+
+    // get the string from `input_val`
+    const joined_name = try note.data.getStrFromInput(self.alloc);
+
+    if (try fs.Notes.rename(self.alloc, note.data.path, joined_name)) |new_path| {
+        const conf_update = std.mem.eql(u8, note.data.path, self.app.config.meta_infos.last_open_note);
+        self.alloc.free(note.data.path);
+        note.data.path = new_path;
+
+        self.alloc.free(note.data.name);
+        note.data.name = joined_name;
+
+        if (conf_update) {
+            self.updateLastNote();
+            // @todo update meta info entries as well
+        }
+    }
+    // @todo handle err with overlay or statusbar message maybe.
+    //
+    try self.cancelEdit();
+}
+
+pub fn cancelEdit(self: *NotesList) !void {
+    const note = self.selectedNote() orelse return;
+    note.data.cancelEdit(self.alloc);
+    self.app.setMode(.normal);
+}
+
+pub fn selectedNote(self: NotesList) ?*NoteItem {
     if (self.getListItem(@intCast(self.selected_index))) |note| {
         return note;
     }
@@ -236,12 +313,18 @@ pub fn cmdLineUp(self: *NotesList) void {
 pub fn cmdSelectNote(self: *NotesList) void {
     if (self.selectedNote()) |note| {
         self.app.editor.openBuf(note.data.path) catch return;
-        self.app.config.meta_infos.setValue(
-            .last_open_note,
-            note.data.path,
-        ) catch return;
-        self.app.config.meta_infos.write() catch return;
+        self.updateLastNote();
     }
+}
+
+/// Updates the `last_open_note` entry in the metainfos file.
+fn updateLastNote(self: *NotesList) void {
+    const note = self.selectedNote() orelse return;
+    self.app.config.meta_infos.setValue(
+        .last_open_note,
+        note.data.path,
+    ) catch return;
+    self.app.config.meta_infos.write() catch return;
 }
 
 pub fn cmdGoToTop(self: *NotesList) void {

@@ -8,6 +8,7 @@ const vx = @import("vaxis");
 const App = @import("App.zig");
 const DirectoryTree = @import("tui/DirectoryTree.zig");
 const NotesList = @import("tui/NotesList.zig");
+const List = @import("tui/List.zig");
 const Editor = @import("tui/Editor.zig");
 const TextArea = @import("tui/widgets/TextArea/TextArea.zig");
 const Vim = @import("tui/widgets/TextArea/Vim.zig");
@@ -45,6 +46,8 @@ pub const FlagValue = enum {
     above,
     below,
     selection,
+    before,
+    after,
 };
 
 pub const Flags = std.ArrayList(FlagValue);
@@ -86,8 +89,15 @@ const fn_registry = [_]FnMap{
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
     .{ .name = "closeNote",         .exec = .{ .input = closeNote }},
 
-    .{ .name = "dirtree.treeExpand",     .exec = .{ .tree = DirectoryTree.cmdExpand }},
-    .{ .name = "dirtree.treeCollapse",   .exec = .{ .tree = DirectoryTree.cmdCollapse }},
+    .{ .name = "listitem.rename",      .exec = .{ .input = listRename } },
+    .{ .name = "listitem.cursorLeft",  .exec = .{ .input = listCursorLeft } },
+    .{ .name = "listitem.cursorRight", .exec = .{ .input = listCursorRight }} ,
+    .{ .name = "listitem.delChar",     .exec = .{ .input = listDeleteChar } },
+    .{ .name = "listitem.cancelEdit",  .exec = .{ .input = listCancelEdit } },
+    .{ .name = "listitem.confirmEdit", .exec = .{ .input = listConfirmEdit } },
+
+    .{ .name = "dirtree.treeExpand",   .exec = .{ .tree = DirectoryTree.cmdExpand }},
+    .{ .name = "dirtree.treeCollapse", .exec = .{ .tree = DirectoryTree.cmdCollapse }},
 
     .{ .name = "statusbar.deleteBefore",  .exec = .{ .input = statusBarDeleteBefore }},
 
@@ -443,6 +453,8 @@ const KeyMap = struct {
         if (std.mem.eql(u8, flag_str, "outer")) flag = .outer;
         if (std.mem.eql(u8, flag_str, "above")) flag = .above;
         if (std.mem.eql(u8, flag_str, "below")) flag = .below;
+        if (std.mem.eql(u8, flag_str, "after")) flag = .after;
+        if (std.mem.eql(u8, flag_str, "before")) flag = .before;
         if (std.mem.eql(u8, flag_str, "selection")) flag = .selection;
         return flag;
     }
@@ -476,10 +488,13 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
             27 => "esc",
             127 => "backspace",
             57349 => "delete",
+            57350 => "left",
+            57351 => "right",
             else => key.text,
         };
     }
 
+    //std.log.debug("{}", .{vx_key});
     // space-key acts as the leader key for now and starts a little temporary
     // thread to achieve vim's `timeoutlen`.
     // It should reset itself after a delay, preferably non-blocking.
@@ -683,7 +698,11 @@ fn confirmAction(self: *Input, flags: ?Flags) void {
 
 fn cancelAction(self: *Input, flags: ?Flags) void {
     _ = flags;
-    self.app.cancelAction();
+    switch (self.app.current_column) {
+        //1 => self.app.directory_tree.cancelEdit() catch return,
+        //2 => self.app.notes_list.cancelEdit() catch return,
+        else => self.app.cancelAction(),
+    }
     self.resetKeySeq();
 }
 
@@ -804,6 +823,78 @@ fn yank(self: *Input, flags: ?Flags) void {
         },
         .redraw_ui = true,
     }) catch return;
+}
+
+pub fn listRename(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    switch (self.app.current_column) {
+        1 => self.app.directory_tree.initEditListItem() catch return,
+        2 => self.app.notes_list.initEditListItem() catch return,
+        else => {},
+    }
+}
+
+fn getListItem(self: *Input) ?struct {
+    item: *List.Item,
+    alloc: std.mem.Allocator,
+} {
+    var item: *List.Item = undefined;
+    var alloc: std.mem.Allocator = undefined;
+    switch (self.app.current_column) {
+        1 => {
+            const tree = self.app.directory_tree;
+            item = &tree.selectedDir().data;
+            alloc = tree.alloc;
+        },
+        2 => {
+            const list = self.app.notes_list;
+            if (list.selectedNote()) |note| item = &note.data;
+            alloc = list.alloc;
+        },
+        else => return null,
+    }
+
+    return .{ .item = item, .alloc = alloc };
+}
+
+pub fn listCursorLeft(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    if (self.getListItem()) |item| {
+        item.item.cursorLeft();
+    }
+}
+
+pub fn listCursorRight(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    if (self.getListItem()) |item| {
+        item.item.cursorRight(false);
+    }
+}
+
+pub fn listDeleteChar(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    if (self.getListItem()) |item| {
+        item.item.deleteBefore(item.alloc);
+    }
+}
+
+pub fn listConfirmEdit(self: *Input, flags: ?Flags) void {
+    _ = flags;
+
+    switch (self.app.current_column) {
+        1 => self.app.directory_tree.confirmEdit() catch return,
+        2 => self.app.notes_list.confirmEdit() catch return,
+        else => {},
+    }
+}
+
+pub fn listCancelEdit(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    switch (self.app.current_column) {
+        1 => self.app.directory_tree.cancelEdit(),
+        2 => self.app.notes_list.cancelEdit() catch return,
+        else => {},
+    }
 }
 
 /// Stupid function just to trigger a redraw.

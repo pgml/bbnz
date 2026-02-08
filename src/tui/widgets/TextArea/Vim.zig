@@ -339,9 +339,9 @@ fn enterInsertMode(self: *Vim, with_history: bool) void {
     self.mode = .insert;
     self.textarea.app.mode = self.mode;
 
-    if (self.textarea.win) |win| {
-        win.screen.cursor_shape = .beam_blink;
-    }
+    // if (self.textarea.win) |win| {
+    //     win.screen.cursor_shape = .beam_blink;
+    // }
 }
 
 pub fn resetSeq(self: *Vim) void {

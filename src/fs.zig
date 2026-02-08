@@ -57,6 +57,31 @@ pub const Directories = struct {
 
         return count;
     }
+
+    /// Attempts to rename the given directory in `old_path` to `new_name`.
+    /// Returns the new path on success, null on failure.
+    pub fn rename(
+        alloc: std.mem.Allocator,
+        old_path: []const u8,
+        new_name: []const u8,
+    ) !?[]const u8 {
+        var dir = try std.fs.openDirAbsolute(old_path, .{ .access_sub_paths = false });
+        defer dir.close();
+
+        if ((try dir.stat()).kind != .directory) {
+            return null;
+        }
+
+        // get the parent of the directory to build the new path
+        const path = std.fs.path.dirname(old_path) orelse return null;
+        const new_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{
+            path,
+            new_name,
+        });
+
+        try std.fs.renameAbsolute(old_path, new_path);
+        return new_path;
+    }
 };
 
 pub const Notes = struct {
@@ -90,5 +115,31 @@ pub const Notes = struct {
 
         const owned = try entries.toOwnedSlice(alloc);
         return owned;
+    }
+
+    /// Attempts to rename the given file in `old_path` to `new_name`.
+    /// Returns the new path on success, null on failure.
+    pub fn rename(
+        alloc: std.mem.Allocator,
+        old_path: []const u8,
+        new_name: []const u8,
+    ) !?[]const u8 {
+        const file = try std.fs.openFileAbsolute(old_path, .{ .mode = .read_only });
+        defer file.close();
+
+        if ((try file.stat()).kind != .file) {
+            return null;
+        }
+
+        // get the parent of the directory to build the new path
+        const path = std.fs.path.dirname(old_path) orelse return null;
+        const new_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{
+            path,
+            new_name,
+        });
+        std.log.debug("{s}", .{new_path});
+
+        try std.fs.renameAbsolute(old_path, new_path);
+        return new_path;
     }
 };

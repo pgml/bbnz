@@ -210,6 +210,10 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
         Cell.writeStr(win, &col, row, " ", style);
 
         // folder icon
+        var dir_style: vx.Style = .{ .fg = theme.Color.List.dir_fg };
+        if (selected_dir == item) {
+            dir_style.bg = theme.Color.List.selection_bg;
+        }
         var dir_icon = Icon.getNerd(.dir_closed);
         if (item.is_expanded) {
             dir_icon = Icon.getNerd(.dir_open);
@@ -219,7 +223,7 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
             dir_icon = Icon.getNerd(.pen);
         }
 
-        Cell.writeStr(win, &col, row, dir_icon, style);
+        Cell.writeStr(win, &col, row, dir_icon, dir_style);
         Cell.writeStr(win, &col, row, " ", style);
 
         // switch to input value when we're renaming

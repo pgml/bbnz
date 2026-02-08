@@ -22,6 +22,8 @@ pub const Color = struct {
     pub const List = struct {
         pub const selection_bg: vx.Color = .{ .rgb = .{ 66, 75, 93 } };
         pub const toggle_fg: vx.Color = .{ .rgb = .{ 96, 109, 135 } };
+        pub const dir_fg: vx.Color = .{ .rgb = .{ 164, 164, 165 } };
+        pub const note_fg: vx.Color = .{ .rgb = .{ 164, 164, 165 } };
     };
 };
 

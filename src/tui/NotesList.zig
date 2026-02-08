@@ -154,13 +154,19 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
     if (self.win) |win| {
         Cell.writeStr(win, &col, row, " ", style);
 
+        var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
+        if (self.selectedNote()) |selected_note| {
+            if (selected_note == item) {
+                icon_style.bg = theme.Color.List.selection_bg;
+            }
+        }
         var note_icon = Icon.getNerd(.note);
         if (self.selectedNote()) |note| {
             if (self.is_insert and note == item) {
                 note_icon = Icon.getNerd(.pen);
             }
         }
-        Cell.writeStr(win, &col, row, note_icon, style);
+        Cell.writeStr(win, &col, row, note_icon, icon_style);
         Cell.writeStr(win, &col, row, " ", style);
 
         // switch to input value when we're renaming

@@ -9,6 +9,7 @@ const Key = vx.Key;
 const Dmp = @import("diffmatchpatch");
 
 const Cell = @import("../../layout/Cell.zig");
+const fs = @import("../../../fs.zig");
 const TextArea = @import("TextArea.zig");
 const Char = Cell.Character;
 //const Char = vx.Cell.Character;
@@ -362,7 +363,8 @@ pub fn init(alloc: std.mem.Allocator) !*Buffer {
 }
 
 pub fn getName(self: Buffer) []const u8 {
-    return std.fs.path.basename(self.path);
+    const file = std.fs.path.basename(self.path);
+    return std.mem.trimEnd(u8, file, fs.Notes.ext);
 }
 
 pub fn setIndex(self: *Buffer, index: usize) void {

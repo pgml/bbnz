@@ -83,16 +83,31 @@ pub const Directories = struct {
             return null;
         }
 
-        if (try makePath(alloc, old_path, new_name)) |new_path| {
+        if (try Directories.makePath(alloc, old_path, new_name)) |new_path| {
             try std.fs.renameAbsolute(old_path, new_path);
             return new_path;
         }
 
         return null;
     }
+
+    fn makePath(
+        alloc: std.mem.Allocator,
+        old_path: []const u8,
+        name: []const u8,
+    ) !?[]const u8 {
+        // get the parent of the directory to build the new path
+        const path = std.fs.path.dirname(old_path) orelse return null;
+        return try std.fmt.allocPrint(alloc, "{s}/{s}", .{
+            path,
+            name,
+        });
+    }
 };
 
 pub const Notes = struct {
+    pub const ext: []const u8 = ".txt";
+
     pub const Entry = struct {
         name: []const u8,
         path: []const u8,
@@ -130,7 +145,12 @@ pub const Notes = struct {
         dir_path: []const u8,
         note_name: []const u8,
     ) ![]const u8 {
-        const path = try std.fs.path.join(alloc, &[_][]const u8{ dir_path, note_name });
+        var name_buf: [64]u8 = undefined;
+        const name = try std.fmt.bufPrint(&name_buf, "{s}{s}", .{
+            note_name,
+            Notes.ext,
+        });
+        const path = try std.fs.path.join(alloc, &[_][]const u8{ dir_path, name });
         _ = try std.fs.createFileAbsolute(path, .{});
         return path;
     }
@@ -149,23 +169,24 @@ pub const Notes = struct {
             return null;
         }
 
-        if (try makePath(alloc, old_path, new_name)) |new_path| {
+        if (try Notes.makePath(alloc, old_path, new_name)) |new_path| {
             try std.fs.renameAbsolute(old_path, new_path);
             return new_path;
         }
         return null;
     }
-};
 
-fn makePath(
-    alloc: std.mem.Allocator,
-    old_path: []const u8,
-    name: []const u8,
-) !?[]const u8 {
-    // get the parent of the directory to build the new path
-    const path = std.fs.path.dirname(old_path) orelse return null;
-    return try std.fmt.allocPrint(alloc, "{s}/{s}", .{
-        path,
-        name,
-    });
-}
+    fn makePath(
+        alloc: std.mem.Allocator,
+        old_path: []const u8,
+        name: []const u8,
+    ) !?[]const u8 {
+        // get the parent of the directory to build the new path
+        const path = std.fs.path.dirname(old_path) orelse return null;
+        return try std.fmt.allocPrint(
+            alloc,
+            "{s}/{s}{s}",
+            .{ path, name, Notes.ext },
+        );
+    }
+};

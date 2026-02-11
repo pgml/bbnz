@@ -174,7 +174,7 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
                 col += 1;
             }
         } else {
-            Cell.writeStr(win, &col, row, item.data.name, style);
+            Cell.writeStr(win, &col, row, item.data.getName(false), style);
         }
 
         w = col;

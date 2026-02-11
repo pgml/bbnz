@@ -4,6 +4,7 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const Cell = @import("../tui/layout/Cell.zig");
+const fs = @import("../fs.zig");
 
 /// Terminal position
 pub const CursorPos = struct {
@@ -50,6 +51,13 @@ pub const Item = struct {
     list_pad_left: u16 = 1,
 
     cell: *Cell = undefined,
+
+    pub fn getName(self: Item, with_ext: bool) []const u8 {
+        if (with_ext) {
+            return self.name;
+        }
+        return std.mem.trimEnd(u8, self.name, fs.Notes.ext);
+    }
 
     /// Handles key input when the item is being edited.
     /// This only effects writing all other key actions are defined
@@ -113,7 +121,7 @@ pub const Item = struct {
     /// to the length of the item representing the terminal column.
     /// Populates `input_val` from `name`.
     pub fn edit(self: *Item, alloc: std.mem.Allocator, win: ?vx.Window) !void {
-        self.input_val = try List.buildNameArray(alloc, self.name, win);
+        self.input_val = try List.buildNameArray(alloc, self.getName(false), win);
         self.edit_pos = .{
             .col = @intCast(self.width),
             .row = @intCast(self.index),

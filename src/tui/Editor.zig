@@ -106,7 +106,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
     }
 }
 
-pub fn drawHeader(self: *Editor, win: vx.Window) !void {
+pub inline fn drawHeader(self: *Editor, win: vx.Window) !void {
     const col: u16 = @intCast(self.cell.offset_x + 1);
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }

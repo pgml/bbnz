@@ -51,6 +51,7 @@ mode normal(Folders, Notes) {
     bind "r"     fn: refreshList          #todo
 }
 
+
 mode insert(Folders, Notes) {
     bind "left"        fn: listitem.cursorLeft
     bind "right"       fn: listitem.cursorRight
@@ -74,7 +75,8 @@ mode normal(BufferList) {
 mode normal(Folders) {
     bind "l"    fn: dirtree.treeExpand
     bind "h"    fn: dirtree.treeCollapse
-    bind "d"    fn: dirtree.createFolder  #todo
+    bind "d"    fn: listitem.create
+}
 }
 
 # —————————————————————————————————————————————————————————————————————————————
@@ -88,7 +90,7 @@ mode command {
 # Notes commands
 # —————————————————————————————————————————————————————————————————————————————
 mode normal(Notes) {
-    bind "%"    fn: notes.create   #todo
+    bind "%"    fn: listitem.create
 }
 
 # —————————————————————————————————————————————————————————————————————————————

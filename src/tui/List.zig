@@ -14,7 +14,7 @@ pub const CursorPos = struct {
 pub const Item = struct {
     /// The row's index is primarily used to determine the indentation
     /// of a directory.
-    index: usize,
+    index: usize = 0,
 
     /// The list item's name
     name: []const u8,
@@ -42,13 +42,19 @@ pub const Item = struct {
 
     //is_selected: bool = false,
 
+    is_temporary: bool = false,
+
     /// The cursor position of the current edit.
     edit_pos: ?CursorPos = null,
+
+    list_pad_left: u16 = 1,
+
+    cell: *Cell = undefined,
 
     /// Handles key input when the item is being edited.
     /// This only effects writing all other key actions are defined
     /// via the keymap.
-    pub fn input(self: *Item, key: vx.Key, alloc: std.mem.Allocator) !void {
+    pub inline fn input(self: *Item, key: vx.Key, alloc: std.mem.Allocator) !void {
         const edit_pos = self.edit_pos orelse return;
         const name_len = self.input_val.items.len;
 
@@ -116,7 +122,7 @@ pub const Item = struct {
 
     /// Cancels the edit.
     /// Sets `edit_pos` to null and frees `input_val`
-    pub fn cancelEdit(self: *Item, alloc: std.mem.Allocator) void {
+    pub fn resetInput(self: *Item, alloc: std.mem.Allocator) void {
         self.input_val.deinit(alloc);
         self.input_val = .empty;
         self.edit_pos = null;
@@ -138,6 +144,7 @@ pub const Item = struct {
 
     pub fn deinit(self: *Item, alloc: std.mem.Allocator) void {
         alloc.free(self.name);
+        alloc.destroy(self.cell);
         self.input_val.deinit(alloc);
     }
 };

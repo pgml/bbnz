@@ -89,6 +89,7 @@ const fn_registry = [_]FnMap{
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
     .{ .name = "closeNote",         .exec = .{ .input = closeNote }},
 
+    .{ .name = "listitem.create",      .exec = .{ .input = listCreate } },
     .{ .name = "listitem.rename",      .exec = .{ .input = listRename } },
     .{ .name = "listitem.cursorLeft",  .exec = .{ .input = listCursorLeft } },
     .{ .name = "listitem.cursorRight", .exec = .{ .input = listCursorRight }} ,
@@ -825,6 +826,15 @@ fn yank(self: *Input, flags: ?Flags) void {
     }) catch return;
 }
 
+pub fn listCreate(self: *Input, flags: ?Flags) void {
+    _ = flags;
+    switch (self.app.current_column) {
+        1 => self.app.directory_tree.createListItem() catch return,
+        2 => self.app.notes_list.createListItem() catch return,
+        else => {},
+    }
+}
+
 pub fn listRename(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
@@ -843,7 +853,7 @@ fn getListItem(self: *Input) ?struct {
     switch (self.app.current_column) {
         1 => {
             const tree = self.app.directory_tree;
-            item = &tree.selectedDir().data;
+            if (tree.selectedDir()) |dir| item = &dir.data;
             alloc = tree.alloc;
         },
         2 => {
@@ -891,7 +901,7 @@ pub fn listConfirmEdit(self: *Input, flags: ?Flags) void {
 pub fn listCancelEdit(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cancelEdit(),
+        1 => self.app.directory_tree.cancelEdit() catch return,
         2 => self.app.notes_list.cancelEdit() catch return,
         else => {},
     }

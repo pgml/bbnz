@@ -235,7 +235,7 @@ fn restoreState(self: *App) !void {
 }
 
 /// prepares all components for rendering, sets dimensions and offsets...
-fn initComponents(self: *App) !void {
+inline fn initComponents(self: *App) !void {
     const win = self.win orelse return;
     const sb_height = self.status_bar.cell.height;
 

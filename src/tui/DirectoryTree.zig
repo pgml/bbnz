@@ -55,11 +55,9 @@ pub const TreeItem = struct {
 
     dir_entry: fs.Directories.Entry = .{},
 
-    cell: *Cell,
-
     /// The parent index of the directory.
     /// Used to make expanding and collapsing a directory possible
-    parent: usize = 0,
+    parent_index: usize = 0,
 
     children: std.ArrayList(usize) = .empty,
 
@@ -82,10 +80,41 @@ pub const TreeItem = struct {
     // Stores the rendered toggle arrow icon
     toggle_arrow: []const u8 = "",
 
+    indent_char: []const u8 = "  ",
+
+    indent_level: u16 = 0,
+
+    pub inline fn hasChildren(self: TreeItem) bool {
+        return self.children.items.len > 0;
+    }
+
+    /// Attempts sets the expand state to true.
+    /// Returns false if state is already expanded or if there's nothing
+    /// to expand, otherwise true.
+    pub fn expand(self: *TreeItem) bool {
+        if (self.is_expanded or self.num_dirs == 0) {
+            return false;
+        }
+        self.is_expanded = true;
+        return true;
+    }
+
+    /// Attempts to set the expand state to false.
+    /// Returns false if `is_expanded` is already false.
+    pub fn collapse(self: *TreeItem, alloc: std.mem.Allocator) bool {
+        if (!self.is_expanded) {
+            return false;
+        }
+        self.is_expanded = false;
+        self.children.clearAndFree(alloc);
+        self.children.deinit(alloc);
+        self.children = .empty;
+        return true;
+    }
+
     pub fn deinit(self: *TreeItem, alloc: std.mem.Allocator) void {
         alloc.free(self.data.path);
         self.children.deinit(alloc);
-        alloc.destroy(self.cell);
         self.data.deinit(alloc);
     }
 };
@@ -122,7 +151,7 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
 
             // handle input in insert mode to edit items
             if (self.app.mode == .insert) {
-                const dir = self.selectedDir();
+                const dir = self.selectedDir() orelse return;
                 try dir.data.input(key, self.alloc);
             }
         },
@@ -148,8 +177,8 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
 
     var index: isize = 0;
     for (self.tree_items.items) |item| {
-        item.cell.setHeight(self.default_item_height);
-        var child_opts = item.cell.getChild();
+        item.data.cell.setHeight(self.default_item_height);
+        var child_opts = item.data.cell.getChild();
         // reset border for each tree item
         child_opts.border = .{};
 
@@ -160,7 +189,7 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        const row: u16 = @intCast(index + item.cell.height - 1);
+        const row: u16 = @intCast(index + item.data.cell.height - 1);
         self.writeLine(item, row, self.cell.width, style);
         item.data.index = @intCast(index);
         index += 1;
@@ -168,54 +197,59 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
 
     // @todo find out why cursor doesn't render on keypress event
     //if (self.app.curevent == .key_press) {
-    const selected_dir = self.selectedDir();
-    if (selected_dir.data.edit_pos) |pos| {
-        child_win.showCursor(pos.col, pos.row);
+    if (self.selectedDir()) |selected_dir| {
+        if (selected_dir.data.edit_pos) |pos| {
+            child_win.showCursor(pos.col, pos.row);
+        }
     }
     //}
 }
 
-pub fn drawHeader(self: DirectoryTree, win: vx.Window, col: u16) void {
+pub inline fn drawHeader(self: DirectoryTree, win: vx.Window, col: u16) void {
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
 
 fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
-    const pad_left = 1;
     var w: usize = 0;
 
     const selected_dir = self.selectedDir();
 
     if (self.win) |win| {
         // indentation
-        for (1..pad_left + item.level) |_| {
-            Cell.writeStr(win, &col, row, "  ", style);
+        for (1..item.data.list_pad_left + item.level) |_| {
+            Cell.writeStr(win, &col, row, item.indent_char, style);
         }
 
         // toggle arrow
         var has_children: []const u8 = " ";
+
         if (item.num_dirs > 0) {
-            has_children = Icon.getAlt(.dir_closed);
+            if (item.is_expanded) {
+                has_children = Icon.getAlt(.dir_open);
+            } else {
+                has_children = Icon.getAlt(.dir_closed);
+            }
         }
+
         var arrow_style: vx.Style = .{ .fg = theme.Color.List.toggle_fg };
         if (selected_dir == item) {
             arrow_style.fg = theme.Color.default_fg;
             arrow_style.bg = theme.Color.List.selection_bg;
         }
 
-        if (item.is_expanded) {
-            has_children = Icon.getAlt(.dir_open);
-        }
         Cell.writeStr(win, &col, row, has_children, arrow_style);
         Cell.writeStr(win, &col, row, " ", style);
 
         // folder icon
-        var dir_style: vx.Style = .{ .fg = theme.Color.List.dir_fg };
+        var icon_style: vx.Style = .{ .fg = theme.Color.List.dir_fg };
         if (selected_dir == item) {
-            dir_style.bg = theme.Color.List.selection_bg;
+            icon_style.fg = theme.Color.default_fg;
+            icon_style.bg = theme.Color.List.selection_bg;
         }
+
         var dir_icon = Icon.getNerd(.dir_closed);
-        if (item.is_expanded) {
+        if (item.is_expanded and item.num_dirs > 0) {
             dir_icon = Icon.getNerd(.dir_open);
             has_children = Icon.getAlt(.dir_open);
         }
@@ -223,7 +257,7 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
             dir_icon = Icon.getNerd(.pen);
         }
 
-        Cell.writeStr(win, &col, row, dir_icon, dir_style);
+        Cell.writeStr(win, &col, row, dir_icon, icon_style);
         Cell.writeStr(win, &col, row, " ", style);
 
         // switch to input value when we're renaming
@@ -250,16 +284,7 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
 pub fn restore(self: *DirectoryTree) !void {
     const meta = self.app.config.meta_infos;
     self.setRowByPath(meta.last_directory);
-
-    var i: usize = 0;
-    for (self.tree_items.items) |item| {
-        if (meta.files_info.get(item.data.path)) |file_info| {
-            if (file_info.is_expanded) {
-                try self.expandTreeItem(i);
-            }
-        }
-        i += 1;
-    }
+    try self.expandItemsFromConfig();
 }
 
 /// Builds the initial directory tree from the notes root directory
@@ -270,40 +295,35 @@ fn buildTreeItems(self: *DirectoryTree) !void {
     const tmp_dir_entries = try fs.Directories.list(arena.allocator(), notes_root);
 
     for (tmp_dir_entries) |entry| {
-        const dir_item = try self.createDirItem(entry, 0, 0);
+        const dir_item = try self.makeTreeItemFromEntry(entry, 0, 0);
         try self.tree_items.append(self.alloc, dir_item);
     }
 }
 
 fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
-    if (index >= self.tree_items.items.len or self.app.mode == .insert) {
+    if (index >= self.treeLen() or self.app.mode == .insert) {
         return;
     }
 
-    var tree_item: *TreeItem = self.getTreeItem(index);
-    const level = tree_item.level;
-
-    if (tree_item.is_expanded or tree_item.num_dirs == 0) {
-        return;
-    }
-
-    tree_item.is_expanded = true;
+    var item: *TreeItem = self.getTreeItem(index) orelse return;
+    if (!item.expand()) return;
 
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
+
     // @todo: dont read the directory everytime we expand
     const tmp_dir_entry = try fs.Directories.list(
         arena.allocator(),
-        tree_item.data.path,
+        item.data.path,
     );
 
     var i: usize = 0;
     for (tmp_dir_entry) |entry| {
-        const item: *TreeItem = try self.createDirItem(entry, index, level + 1);
-        try self.tree_items.insert(self.alloc, index + 1, item);
+        const tree_item = try self.makeTreeItemFromEntry(entry, index, item.level + 1);
+        try self.tree_items.insert(self.alloc, index + 1, tree_item);
         // track the child directories so that we can free them properly
         // when we collapse this directory.
-        try tree_item.children.append(self.alloc, index + i);
+        try item.children.append(self.alloc, index + i);
         i += 1;
     }
 }
@@ -313,19 +333,12 @@ fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
         return;
     }
 
-    var tree_item: *TreeItem = self.getTreeItem(index);
-    const tree_len = tree_item.children.items.len;
-
-    if (!tree_item.is_expanded or tree_len == 0) {
-        return;
-    }
-
-    tree_item.is_expanded = false;
+    var item: *TreeItem = self.getTreeItem(index) orelse return;
 
     // free the children
-    for (tree_item.children.items) |_| {
+    for (item.children.items) |_| {
         const cindex = index + 1;
-        const child = self.getTreeItem(cindex);
+        const child = self.getTreeItem(cindex) orelse continue;
 
         if (child.children.items.len > 0) {
             try self.collapseTreeItem(cindex);
@@ -336,47 +349,128 @@ fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
         self.alloc.destroy(row);
     }
 
-    tree_item.children.clearAndFree(self.alloc);
-    tree_item.children.deinit(self.alloc);
-    tree_item.children = .empty;
+    _ = item.collapse(self.alloc);
 }
 
-fn createDirItem(
+/// allocates the given TreeItem.
+fn allocTreeItem(
     self: *DirectoryTree,
-    item: fs.Directories.Entry,
-    parent_index: usize,
-    level: u16,
+    item: TreeItem,
 ) !*TreeItem {
     const tree_item = try self.alloc.create(TreeItem);
-
     const cell: *Cell = try .init(self.alloc);
     cell.setHeight(self.default_item_height);
 
     tree_item.* = .{
-        .parent = parent_index,
-        .level = level,
+        .parent_index = item.parent_index,
+        .level = item.level,
         .data = .{
             .index = 0,
-            .name = try self.alloc.dupe(u8, item.basename),
-            .path = try self.alloc.dupe(u8, item.path),
+            .name = try self.alloc.dupe(u8, item.data.name),
+            .path = try self.alloc.dupe(u8, item.data.path),
+            .width = @intCast(item.data.width),
+            .cell = cell,
+            .is_temporary = item.data.is_temporary,
         },
-        .cell = cell,
         .num_dirs = item.num_dirs,
-        .num_notes = item.num_files,
+        .num_notes = item.num_notes,
     };
 
     return tree_item;
 }
 
-fn getTreeItem(self: DirectoryTree, index: usize) *TreeItem {
+/// Creates a default `TreeItem`.
+/// If `parent_item` is set, the new item will be a child of `parent_item`.
+fn makeTreeItem(self: *DirectoryTree, parent_item: ?*TreeItem) !*TreeItem {
+    const name = "New Folder";
+    // whitespace after icons
+    // @todo find a better way to determine width
+    const ws = 2;
+    var width = name.len + ws;
+    var level: u16 = 0;
+    var parent_index: usize = 0;
+
+    var path = try self.alloc.dupe(u8, try self.app.config.getNotesRootDir());
+    defer self.alloc.free(path);
+
+    if (parent_item) |parent| {
+        const indw = parent.data.width - parent.data.name.len;
+        width = indw + name.len + ws;
+        level = parent.level + 1;
+        parent_index = parent.data.index;
+
+        self.alloc.free(path);
+        path = try std.fs.path.join(self.alloc, &.{ parent.data.path, name });
+    }
+
+    const tree_item = self.allocTreeItem(.{
+        .parent_index = parent_index,
+        .level = level,
+        .data = .{
+            .name = name,
+            .path = path,
+            .width = @intCast(width),
+            .is_temporary = true,
+        },
+    });
+
+    return tree_item;
+}
+
+/// Creates a tree item from a `fs.Directories.Entry`
+fn makeTreeItemFromEntry(
+    self: *DirectoryTree,
+    entry: fs.Directories.Entry,
+    parent_index: usize,
+    level: u16,
+) !*TreeItem {
+    return self.allocTreeItem(.{
+        .parent_index = parent_index,
+        .level = level,
+        .data = .{
+            .name = entry.basename,
+            .path = entry.path,
+        },
+        .num_dirs = entry.num_dirs,
+        .num_notes = entry.num_files,
+    });
+}
+
+fn getTreeItem(self: DirectoryTree, index: usize) ?*TreeItem {
+    if (index > self.treeLen()) return null;
     return self.tree_items.items[index];
+}
+
+/// Inserts a temporary item into the directory tree in insert mode
+/// as a child of the selected directory and selects it.
+pub fn createListItem(self: *DirectoryTree) !void {
+    const dir = self.selectedDir() orelse return;
+    dir.num_dirs += 1;
+
+    if (!dir.is_expanded) {
+        try self.expandTreeItem(dir.data.index);
+    }
+
+    const last_index = self.getLastChildIndex(dir.data.index);
+    const list_item = try self.makeTreeItem(dir);
+    const tmp_path = try std.fs.path.join(self.alloc, &.{
+        dir.data.path,
+        list_item.data.name,
+    });
+    defer self.alloc.free(tmp_path);
+
+    self.selected_index = @intCast(last_index);
+    try self.tree_items.insert(self.alloc, last_index, list_item);
+    try dir.children.append(self.alloc, last_index);
+    list_item.data.index = last_index;
+    try self.initEditListItem();
 }
 
 /// Prepares a list item for editing.
 /// Sets app into insert mode and stores the initial target cursor position
 /// for the item.
 pub fn initEditListItem(self: *DirectoryTree) !void {
-    const dir = self.selectedDir();
+    const dir = self.selectedDir() orelse return;
     try dir.data.edit(self.alloc, self.win);
     self.app.setMode(.insert);
 }
@@ -385,37 +479,111 @@ pub fn initEditListItem(self: *DirectoryTree) !void {
 /// Renames the edited item on the operating system and updates
 /// the meta info file if necessary.
 pub fn confirmEdit(self: *DirectoryTree) !void {
-    const dir = self.selectedDir();
+    const dir = self.selectedDir() orelse return;
+    const dir_path = dir.data.path;
 
     // get the string from `input_val`
-    const joined_name = try dir.data.getStrFromInput(self.alloc);
+    const name = try dir.data.getStrFromInput(self.alloc);
 
-    if (try fs.Directories.rename(self.alloc, dir.data.path, joined_name)) |new_path| {
-        const conf_update = std.mem.eql(u8, dir.data.path, self.app.config.meta_infos.last_directory);
+    // folder create
+    if (dir.data.is_temporary) {
+        const new_path = fs.Directories.create(self.alloc, dir_path, name) catch |err| {
+            std.log.err(
+                "Failed to create directory: {s} ({})",
+                .{ dir.data.path, err },
+            );
+            return;
+        };
 
-        // update tree item
-        self.alloc.free(dir.data.path);
-        dir.data.path = new_path;
-
-        self.alloc.free(dir.data.name);
-        dir.data.name = joined_name;
-
-        if (conf_update) {
-            self.updateLastDir();
-            // @todo update meta info entries as well
+        if (new_path) |path| {
+            // free old data and replace with new data if creation was successful.
+            self.alloc.free(dir.data.path);
+            self.alloc.free(dir.data.name);
+            dir.data.path = path;
+            dir.data.name = name;
+        } else {
+            self.alloc.free(name);
         }
+
+        dir.data.resetInput(self.alloc);
+        self.app.setMode(.normal);
     }
-    // @todo handle err with overlay or statusbar message maybe.
-    //
-    self.cancelEdit();
+    // folder rename
+    else {
+        if (try fs.Directories.rename(self.alloc, dir_path, name)) |new_path| {
+            // nothing's changed, bail out
+            if (std.mem.eql(u8, dir_path, new_path)) {
+                try self.cancelEdit();
+                self.alloc.free(name);
+                return;
+            }
+
+            const meta = self.app.config.meta_infos;
+            // check for last directory equality here since it's path will
+            // be freed later when we actually need to check it.
+            const conf_update = std.mem.eql(u8, dir_path, meta.last_directory);
+
+            // update tree item
+            self.alloc.free(dir.data.path);
+            self.alloc.free(dir.data.name);
+            dir.data.path = new_path;
+            dir.data.name = name;
+
+            if (conf_update) {
+                self.updateLastDir();
+                // @todo update meta info entries as well
+            }
+        }
+        //
+        // @todo handle err with overlay or statusbar message maybe.
+        //
+        try self.cancelEdit();
+    }
 }
 
 /// Cancels the editing process for the selected item.
 /// Sets app mode to normal.
-pub fn cancelEdit(self: *DirectoryTree) void {
-    const dir = self.selectedDir();
-    dir.data.cancelEdit(self.alloc);
+pub fn cancelEdit(self: *DirectoryTree) !void {
+    const dir = self.selectedDir() orelse return;
+    dir.data.resetInput(self.alloc);
     self.app.setMode(.normal);
+
+    // Remove any traces of temporary child directories.
+    if (dir.data.is_temporary) {
+        const parent = self.getTreeItem(dir.parent_index) orelse return;
+        self.selected_index = @intCast(parent.data.index);
+
+        if (parent.num_dirs == 1) {
+            parent.num_dirs -= 1;
+        }
+
+        const children = parent.children.items;
+        for (0..parent.children.items.len) |i| {
+            if (children[i] == dir.data.index) {
+                _ = parent.children.orderedRemove(i);
+            }
+        }
+
+        const item = self.tree_items.orderedRemove(dir.data.index);
+        item.deinit(self.alloc);
+
+        self.tree_items.shrinkAndFree(self.alloc, self.tree_items.items.len);
+        self.alloc.destroy(dir);
+    }
+}
+
+fn expandItemsFromConfig(self: *DirectoryTree) !void {
+    var meta = self.app.config.meta_infos;
+    var i: usize = 0;
+
+    for (self.tree_items.items) |tree_item| {
+        if (meta.files_info.get(tree_item.data.path)) |file_info| {
+            if (file_info.is_expanded) {
+                try self.expandTreeItem(i);
+            }
+        }
+        i += 1;
+    }
 }
 
 pub fn setRowByPath(self: *DirectoryTree, path: []const u8) void {
@@ -435,7 +603,33 @@ pub fn getIndexByPath(self: DirectoryTree, path: []const u8) usize {
     return 0;
 }
 
-pub fn selectedDir(self: DirectoryTree) *TreeItem {
+/// Returns the last child of the tree item with the given index
+fn getLastChildIndex(self: *DirectoryTree, parent_index: usize) usize {
+    if (self.getTreeItem(parent_index)) |dir| {
+        var child_index = self.tree_items.items.len;
+
+        if (dir.hasChildren()) {
+            var i: usize = parent_index;
+            for (self.tree_items.items) |item| {
+                if (item.parent_index < parent_index) {
+                    continue;
+                }
+                i += 1;
+                child_index = i;
+            }
+        }
+        // if there's no children, take the index of the parent
+        else {
+            child_index = parent_index;
+        }
+
+        return child_index + 1;
+    }
+
+    return 0;
+}
+
+pub inline fn selectedDir(self: DirectoryTree) ?*TreeItem {
     return self.getTreeItem(@intCast(self.selected_index));
 }
 
@@ -465,21 +659,21 @@ pub fn cmdLineUp(self: *DirectoryTree) void {
 
 pub fn cmdExpand(self: *DirectoryTree) void {
     self.expandTreeItem(@intCast(self.selected_index)) catch return;
-    const item = self.getTreeItem(@intCast(self.selected_index));
+    const item = self.getTreeItem(@intCast(self.selected_index)) orelse return;
     self.app.config.meta_infos.addFileInfo(item) catch return;
     self.app.config.meta_infos.write() catch return;
 }
 
 pub fn cmdCollapse(self: *DirectoryTree) void {
     self.collapseTreeItem(@intCast(self.selected_index)) catch return;
-    const item = self.getTreeItem(@intCast(self.selected_index));
+    const item = self.getTreeItem(@intCast(self.selected_index)) orelse return;
     self.app.config.meta_infos.addFileInfo(item) catch return;
     self.app.config.meta_infos.write() catch return;
 }
 
 pub fn cmdSelectDir(self: *DirectoryTree) void {
     if (self.is_insert) return;
-    const selected_dir = self.selectedDir();
+    const selected_dir = self.selectedDir() orelse return;
     self.app.notes_list.getNotes(selected_dir.data.path) catch return;
     self.updateLastDir();
 }
@@ -504,10 +698,8 @@ fn clampIndex(self: *DirectoryTree) void {
 
 /// Updates the `last_directory` entry in the metainfos file.
 fn updateLastDir(self: DirectoryTree) void {
-    self.app.config.meta_infos.setValue(
-        .last_directory,
-        self.selectedDir().data.path,
-    ) catch return;
+    const dir = self.selectedDir() orelse return;
+    self.app.config.meta_infos.setValue(.last_directory, dir.data.path) catch return;
     self.app.config.meta_infos.write() catch return;
 }
 

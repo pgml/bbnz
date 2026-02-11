@@ -120,7 +120,7 @@ pub fn get(grapheme: []const u8, width: u8, style: vx.Style) vx.Cell {
     };
 }
 
-pub fn writeStr(win: vx.Window, col: *u16, row: u16, value: []const u8, style: vx.Style) void {
+pub inline fn writeStr(win: vx.Window, col: *u16, row: u16, value: []const u8, style: vx.Style) void {
     var cmd_iter = vx.unicode.graphemeIterator(value);
     while (cmd_iter.next()) |grapheme| {
         const g = grapheme.bytes(value);

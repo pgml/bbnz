@@ -60,8 +60,6 @@ pub const NoteItem = struct {
     /// General list data
     data: List.Item,
 
-    cell: *Cell,
-
     /// Stores the rendered toggle arrow icon
     icon: []const u8 = "",
 
@@ -70,7 +68,6 @@ pub const NoteItem = struct {
 
     pub fn deinit(self: *NoteItem, alloc: std.mem.Allocator) void {
         alloc.free(self.data.path);
-        alloc.destroy(self.cell);
         self.data.deinit(alloc);
     }
 };
@@ -120,8 +117,8 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
     var index: isize = 0;
     for (self.note_items.items) |item| {
-        item.cell.setHeight(self.default_item_height);
-        var child_opts = item.cell.getChild();
+        item.data.cell.setHeight(self.default_item_height);
+        var child_opts = item.data.cell.getChild();
         // reset border for each tree item
         child_opts.border = .{};
 
@@ -132,7 +129,7 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        const row: u16 = @intCast(index + item.cell.height - 1);
+        const row: u16 = @intCast(index + item.data.cell.height - 1);
         self.writeLine(item, row, self.cell.width, style);
         item.data.index = @intCast(index);
         index += 1;
@@ -143,7 +140,7 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
     }
 }
 
-pub fn drawHeader(self: NotesList, win: vx.Window) void {
+pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
     const col: u16 = @intCast(self.cell.offset_x + 1);
     Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
 }
@@ -216,12 +213,12 @@ pub fn getNotes(self: *NotesList, path: []const u8) !void {
     self.note_items = .empty;
 
     for (tmp_note_entries) |entry| {
-        const note_item = try self.createNoteItem(entry);
+        const note_item = try self.makeNoteItemFromEntry(entry);
         try self.note_items.append(self.alloc, note_item);
     }
 }
 
-fn createNoteItem(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
+fn allocNoteItem(self: *NotesList, item: NoteItem) !*NoteItem {
     const note_item = try self.alloc.create(NoteItem);
 
     const cell: *Cell = try .init(self.alloc);
@@ -230,13 +227,38 @@ fn createNoteItem(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
     note_item.* = .{
         .data = .{
             .index = 0,
-            .name = try self.alloc.dupe(u8, item.name),
-            .path = try self.alloc.dupe(u8, item.path),
+            .name = try self.alloc.dupe(u8, item.data.name),
+            .path = try self.alloc.dupe(u8, item.data.path),
+            .width = item.data.width,
+            .cell = cell,
+            .is_temporary = item.data.is_temporary,
         },
-        .cell = cell,
     };
 
     return note_item;
+}
+
+fn makeNoteItem(self: *NotesList) !*NoteItem {
+    const name = "New Note";
+    const width = name.len + 3; // 3 = padding, icon, padding @todo, make it ugly
+
+    return self.allocNoteItem(.{
+        .data = .{
+            .name = name,
+            .path = self.current_path,
+            .width = width,
+            .is_temporary = true,
+        },
+    });
+}
+
+fn makeNoteItemFromEntry(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
+    return self.allocNoteItem(.{
+        .data = .{
+            .name = item.name,
+            .path = item.path,
+        },
+    });
 }
 
 fn getListItem(self: NotesList, index: usize) ?*NoteItem {
@@ -244,6 +266,17 @@ fn getListItem(self: NotesList, index: usize) ?*NoteItem {
         return null;
     }
     return self.note_items.items[index];
+}
+
+/// Inserts a temporary item into the directory tree in insert mode
+/// as a child of the selected directory and selects it.
+pub fn createListItem(self: *NotesList) !void {
+    const list_item = try self.makeNoteItem();
+
+    try self.note_items.append(self.alloc, list_item);
+    list_item.data.index = self.note_items.items.len - 1;
+    self.selected_index = @intCast(list_item.data.index);
+    try self.initEditListItem();
 }
 
 /// Prepares a list item for editing.
@@ -262,30 +295,68 @@ pub fn confirmEdit(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
 
     // get the string from `input_val`
-    const joined_name = try note.data.getStrFromInput(self.alloc);
+    const name = try note.data.getStrFromInput(self.alloc);
 
-    if (try fs.Notes.rename(self.alloc, note.data.path, joined_name)) |new_path| {
-        const conf_update = std.mem.eql(u8, note.data.path, self.app.config.meta_infos.last_open_note);
+    if (note.data.is_temporary) {
+        const new_path = fs.Notes.create(self.alloc, self.current_path, name) catch |err| {
+            self.alloc.free(name);
+            std.log.err(
+                "Failed to create directory: {s} ({})",
+                .{ note.data.path, err },
+            );
+            return;
+        };
+
+        // free old data and replace with new data if creation was successful.
         self.alloc.free(note.data.path);
-        note.data.path = new_path;
-
         self.alloc.free(note.data.name);
-        note.data.name = joined_name;
+        note.data.path = new_path;
+        note.data.name = name;
+        note.data.resetInput(self.alloc);
+        self.app.setMode(.normal);
+    } else {
+        if (try fs.Notes.rename(self.alloc, note.data.path, name)) |new_path| {
+            // nothing's changed, bail out
+            if (std.mem.eql(u8, note.data.path, new_path)) {
+                try self.cancelEdit();
+                self.alloc.free(name);
+                return;
+            }
 
-        if (conf_update) {
-            self.updateLastNote();
-            // @todo update meta info entries as well
+            const conf_update = std.mem.eql(
+                u8,
+                note.data.path,
+                self.app.config.meta_infos.last_open_note,
+            );
+
+            self.alloc.free(note.data.path);
+            self.alloc.free(note.data.name);
+            note.data.path = new_path;
+            note.data.name = name;
+
+            if (conf_update) {
+                self.updateLastNote();
+                // @todo update meta info entries as well
+            }
         }
+        // @todo handle err with overlay or statusbar message maybe.
+        //
+        try self.cancelEdit();
     }
-    // @todo handle err with overlay or statusbar message maybe.
-    //
-    try self.cancelEdit();
 }
 
 pub fn cancelEdit(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
-    note.data.cancelEdit(self.alloc);
+    note.data.resetInput(self.alloc);
     self.app.setMode(.normal);
+
+    if (note.data.is_temporary) {
+        const item = self.note_items.orderedRemove(note.data.index);
+        item.deinit(self.alloc);
+
+        self.note_items.shrinkAndFree(self.alloc, self.note_items.items.len);
+        self.alloc.destroy(item);
+    }
 }
 
 pub fn selectedNote(self: NotesList) ?*NoteItem {

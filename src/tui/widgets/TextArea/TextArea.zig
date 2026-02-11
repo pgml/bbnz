@@ -349,7 +349,7 @@ pub fn curBuf(self: TextArea) *Buffer {
 }
 
 /// Enables vim motions.
-pub fn enableVimMode(self: *TextArea) !void {
+pub inline fn enableVimMode(self: *TextArea) !void {
     self.vim.enable();
 }
 

@@ -59,6 +59,19 @@ pub const Item = struct {
         return std.mem.trimEnd(u8, self.name, fs.Notes.ext);
     }
 
+    pub fn reinit(
+        self: *Item,
+        alloc: std.mem.Allocator,
+        path: []const u8,
+        name: []const u8,
+    ) void {
+        alloc.free(self.path);
+        alloc.free(self.name);
+        self.path = path;
+        self.name = name;
+        self.is_temporary = false;
+    }
+
     /// Handles key input when the item is being edited.
     /// This only effects writing all other key actions are defined
     /// via the keymap.

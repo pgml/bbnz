@@ -24,7 +24,7 @@ pub fn toFile(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const path = switch (message_level) {
+    var path = switch (message_level) {
         .debug => app_log,
         .info => app_log,
         .warn => err_log,

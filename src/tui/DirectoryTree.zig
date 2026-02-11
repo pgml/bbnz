@@ -496,11 +496,7 @@ pub fn confirmEdit(self: *DirectoryTree) !void {
         };
 
         if (new_path) |path| {
-            // free old data and replace with new data if creation was successful.
-            self.alloc.free(dir.data.path);
-            self.alloc.free(dir.data.name);
-            dir.data.path = path;
-            dir.data.name = name;
+            dir.data.reinit(self.alloc, path, name);
         } else {
             self.alloc.free(name);
         }

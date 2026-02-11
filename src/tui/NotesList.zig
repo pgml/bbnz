@@ -8,6 +8,7 @@ const Buffer = @import("widgets/TextArea/TextArea.zig").Buffer;
 const Cell = @import("layout/Cell.zig");
 const fs = @import("../fs.zig");
 const List = @import("List.zig");
+const log = @import("../log.zig");
 const theme = @import("layout/theme.zig");
 const Icon = theme.Icon;
 const utils = @import("../utils.zig");
@@ -300,7 +301,7 @@ pub fn confirmEdit(self: *NotesList) !void {
     if (note.data.is_temporary) {
         const new_path = fs.Notes.create(self.alloc, self.current_path, name) catch |err| {
             self.alloc.free(name);
-            std.log.err(
+            log.err(
                 "Failed to create directory: {s} ({})",
                 .{ note.data.path, err },
             );
@@ -308,10 +309,7 @@ pub fn confirmEdit(self: *NotesList) !void {
         };
 
         // free old data and replace with new data if creation was successful.
-        self.alloc.free(note.data.path);
-        self.alloc.free(note.data.name);
-        note.data.path = new_path;
-        note.data.name = name;
+        note.data.reinit(self.alloc, new_path, name);
         note.data.resetInput(self.alloc);
         self.app.setMode(.normal);
     } else {

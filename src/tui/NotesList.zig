@@ -135,7 +135,7 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
         item.data.index = @intCast(index);
         index += 1;
 
-        if (item.data.edit_pos) |pos| {
+        if (item.data.edit_info) |pos| {
             self.win.?.showCursor(pos.col, pos.row);
         }
     }
@@ -156,6 +156,7 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
         var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
         if (self.selectedNote()) |selected_note| {
             if (selected_note == item) {
+                icon_style.fg = theme.Color.default_fg;
                 icon_style.bg = theme.Color.List.selection_bg;
             }
         }
@@ -169,7 +170,7 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
         Cell.writeStr(win, &col, row, " ", style);
 
         // switch to input value when we're renaming
-        if (self.is_insert and item.data.edit_pos != null) {
+        if (self.is_insert and item.data.edit_info != null) {
             for (item.data.input_val.items) |char| {
                 win.writeCell(col, row, Cell.get(char.grapheme, char.width, style));
                 col += 1;
@@ -286,6 +287,9 @@ pub fn createListItem(self: *NotesList) !void {
 pub fn initEditListItem(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
     try note.data.edit(self.alloc, self.win);
+    // @todo save previous selected row so we can go back to that row
+    // after canceling.
+    //note.data.edit_info.?.prev_row = @intCast(self.selected_index);
     self.app.setMode(.insert);
 }
 
@@ -345,6 +349,7 @@ pub fn confirmEdit(self: *NotesList) !void {
 
 pub fn cancelEdit(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
+    const prev_row = note.data.edit_info.?.prev_row;
     note.data.resetInput(self.alloc);
     self.app.setMode(.normal);
 
@@ -353,6 +358,7 @@ pub fn cancelEdit(self: *NotesList) !void {
         item.deinit(self.alloc);
 
         self.note_items.shrinkAndFree(self.alloc, self.note_items.items.len);
+        self.selected_index = prev_row;
         self.alloc.destroy(item);
     }
 }

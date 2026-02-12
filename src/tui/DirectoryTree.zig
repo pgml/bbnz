@@ -198,7 +198,7 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
     // @todo find out why cursor doesn't render on keypress event
     //if (self.app.curevent == .key_press) {
     if (self.selectedDir()) |selected_dir| {
-        if (selected_dir.data.edit_pos) |pos| {
+        if (selected_dir.data.edit_info) |pos| {
             child_win.showCursor(pos.col, pos.row);
         }
     }
@@ -261,7 +261,7 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
         Cell.writeStr(win, &col, row, " ", style);
 
         // switch to input value when we're renaming
-        if (self.is_insert and item.data.edit_pos != null) {
+        if (self.is_insert and item.data.edit_info != null) {
             for (item.data.input_val.items) |char| {
                 win.writeCell(col, row, Cell.get(char.grapheme, char.width, style));
                 col += 1;

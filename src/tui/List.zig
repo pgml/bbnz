@@ -8,6 +8,7 @@ const fs = @import("../fs.zig");
 
 /// Terminal position
 pub const CursorPos = struct {
+    prev_row: u16 = 0,
     row: u16 = 0,
     col: u16 = 0,
 };
@@ -46,7 +47,7 @@ pub const Item = struct {
     is_temporary: bool = false,
 
     /// The cursor position of the current edit.
-    edit_pos: ?CursorPos = null,
+    edit_info: ?CursorPos = null,
 
     list_pad_left: u16 = 1,
 
@@ -76,11 +77,11 @@ pub const Item = struct {
     /// This only effects writing all other key actions are defined
     /// via the keymap.
     pub inline fn input(self: *Item, key: vx.Key, alloc: std.mem.Allocator) !void {
-        const edit_pos = self.edit_pos orelse return;
+        const edit_info = self.edit_info orelse return;
         const name_len = self.input_val.items.len;
 
         if (key.text) |text| {
-            const index = edit_pos.col - (self.width - name_len);
+            const index = edit_info.col - (self.width - name_len);
             try self.input_val.insert(alloc, index, .{
                 .grapheme = text,
                 .width = 1,
@@ -91,7 +92,7 @@ pub const Item = struct {
 
     /// Moves the cursor one character to the left when the item is being edited
     pub fn cursorLeft(self: *Item) void {
-        if (self.edit_pos) |*pos| {
+        if (self.edit_info) |*pos| {
             const name_len = self.input_val.items.len;
             if (pos.col > self.width - name_len) {
                 pos.col -= 1;
@@ -103,7 +104,7 @@ pub const Item = struct {
     /// If `oob` is set to true the cursor is allowed to be positioned out of bounds
     /// which we only ever want when we're inserting text, not while navigating.
     pub fn cursorRight(self: *Item, oob: bool) void {
-        if (self.edit_pos) |*pos| {
+        if (self.edit_info) |*pos| {
             var can_move = pos.col < self.width;
             if (oob) {
                 can_move = pos.col <= self.width;
@@ -116,15 +117,15 @@ pub const Item = struct {
 
     /// Deletes the character before the cursor.
     pub fn deleteBefore(self: *Item, alloc: std.mem.Allocator) void {
-        const pos = self.edit_pos orelse return;
+        const edit_info = self.edit_info orelse return;
         const name_len = self.input_val.items.len;
 
         self.cursorLeft();
-        if (pos.col <= self.width - name_len or name_len == 0) {
+        if (edit_info.col <= self.width - name_len or name_len == 0) {
             return;
         }
 
-        const index: usize = @intCast(name_len - (self.width - pos.col));
+        const index: usize = @intCast(name_len - (self.width - edit_info.col));
         _ = self.input_val.orderedRemove(index - 1);
         self.input_val.shrinkAndFree(alloc, self.input_val.items.len);
     }
@@ -135,7 +136,7 @@ pub const Item = struct {
     /// Populates `input_val` from `name`.
     pub fn edit(self: *Item, alloc: std.mem.Allocator, win: ?vx.Window) !void {
         self.input_val = try List.buildNameArray(alloc, self.getName(false), win);
-        self.edit_pos = .{
+        self.edit_info = .{
             .col = @intCast(self.width),
             .row = @intCast(self.index),
         };
@@ -146,7 +147,7 @@ pub const Item = struct {
     pub fn resetInput(self: *Item, alloc: std.mem.Allocator) void {
         self.input_val.deinit(alloc);
         self.input_val = .empty;
-        self.edit_pos = null;
+        self.edit_info = null;
     }
 
     /// Returns the string representation of the `input_val`.

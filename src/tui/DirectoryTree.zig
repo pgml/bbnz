@@ -451,7 +451,8 @@ pub fn createListItem(self: *DirectoryTree) !void {
         try self.expandTreeItem(dir.data.index);
     }
 
-    const last_index = self.getLastChildIndex(dir.data.index);
+    //const last_index = self.getLastChildIndex(dir.data.index);
+    const index = dir.data.index + 1;
     const list_item = try self.makeTreeItem(dir);
     const tmp_path = try std.fs.path.join(self.alloc, &.{
         dir.data.path,
@@ -459,10 +460,10 @@ pub fn createListItem(self: *DirectoryTree) !void {
     });
     defer self.alloc.free(tmp_path);
 
-    self.selected_index = @intCast(last_index);
-    try self.tree_items.insert(self.alloc, last_index, list_item);
-    try dir.children.append(self.alloc, last_index);
-    list_item.data.index = last_index;
+    self.selected_index = @intCast(index);
+    try self.tree_items.insert(self.alloc, index, list_item);
+    try dir.children.append(self.alloc, index);
+    list_item.data.index = index;
     try self.initEditListItem();
 }
 
@@ -600,30 +601,47 @@ pub fn getIndexByPath(self: DirectoryTree, path: []const u8) usize {
 }
 
 /// Returns the last child of the tree item with the given index
-fn getLastChildIndex(self: *DirectoryTree, parent_index: usize) usize {
-    if (self.getTreeItem(parent_index)) |dir| {
-        var child_index = self.tree_items.items.len;
-
-        if (dir.hasChildren()) {
-            var i: usize = parent_index;
-            for (self.tree_items.items) |item| {
-                if (item.parent_index < parent_index) {
-                    continue;
-                }
-                i += 1;
-                child_index = i;
-            }
-        }
-        // if there's no children, take the index of the parent
-        else {
-            child_index = parent_index;
-        }
-
-        return child_index + 1;
-    }
-
-    return 0;
-}
+// broken, don't use, fix later.
+//fn getLastChildIndex(self: *DirectoryTree, parent_index: usize) usize {
+//    var parent_dir = self.getTreeItem(parent_index) orelse return 0;
+//    //var child_index = self.tree_items.items.len;
+//
+//    if (parent_dir.hasChildren()) {
+//        var last_child = parent_dir.children.getLast();
+//        //std.log.debug("{}", .{dir.children.getLast()});
+//        var i: usize = parent_index;
+//        for (self.tree_items.items) |item| {
+//            if (item.hasChildren()) {
+//                last_child = item.children.getLast();
+//            }
+//            std.log.debug("{} > {} - {}, {}, {} --- {s}", .{
+//                parent_index,
+//                item.parent_index,
+//                last_child,
+//                i,
+//                item.hasChildren(),
+//                item.data.path,
+//            });
+//            if (i > last_child) {
+//                //std.log.debug("{} {}", .{
+//                //    last_child,
+//                //});
+//                continue;
+//            }
+//            i += 1;
+//            //std.log.debug("yo", .{});
+//            //child_index = i;
+//        }
+//        //child_index = parent_index;
+//    }
+//    // if there's no children, take the index of the parent
+//    else {
+//        //child_index = parent_index;
+//    }
+//
+//    return parent_index + 1;
+//    //return child_index + 1;
+//}
 
 pub inline fn selectedDir(self: DirectoryTree) ?*TreeItem {
     return self.getTreeItem(@intCast(self.selected_index));

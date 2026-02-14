@@ -4,8 +4,9 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const App = @import("../App.zig");
+const Config = App.Config;
+
 const Cell = @import("layout/Cell.zig");
-const Config = @import("../Config.zig");
 const log = @import("../log.zig");
 pub const TextArea = @import("widgets/TextArea/TextArea.zig");
 pub const Buffer = TextArea.Buffer;

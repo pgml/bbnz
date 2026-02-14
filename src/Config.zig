@@ -4,9 +4,9 @@ const std = @import("std");
 const known_folders = @import("known-folders");
 const microwave = @import("microwave");
 
-const DiretoryTree = @import("tui/DirectoryTree.zig");
-const NotesLIst = @import("tui/NotesList.zig");
-const TextArea = @import("tui/widgets/TextArea/TextArea.zig");
+const tui = @import("tui/tui.zig");
+const TextArea = tui.Editor.TextArea;
+
 const theme = @import("tui/layout/theme.zig");
 const utils = @import("utils.zig");
 

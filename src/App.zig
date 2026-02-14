@@ -3,13 +3,15 @@ const App = @This();
 const std = @import("std");
 const vaxis = @import("vaxis");
 
-const Config = @import("Config.zig");
-const DirectoryTree = @import("tui/DirectoryTree.zig");
-const Editor = @import("tui/Editor.zig");
-const Input = @import("Input.zig");
-const NotesList = @import("tui/NotesList.zig");
-const StatusBar = @import("tui/StatusBar.zig");
+pub const Config = @import("Config.zig");
+pub const Input = @import("Input.zig");
 const log = @import("log.zig");
+
+const tui = @import("tui/tui.zig");
+const DirectoryTree = tui.DirectoryTree;
+const Editor = tui.Editor;
+const NotesList = tui.NotesList;
+const StatusBar = tui.StatusBar;
 
 alloc: std.mem.Allocator,
 

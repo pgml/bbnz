@@ -6,12 +6,13 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const App = @import("App.zig");
-const DirectoryTree = @import("tui/DirectoryTree.zig");
-const NotesList = @import("tui/NotesList.zig");
-const List = @import("tui/List.zig");
-const Editor = @import("tui/Editor.zig");
-const TextArea = @import("tui/widgets/TextArea/TextArea.zig");
-const Vim = @import("tui/widgets/TextArea/Vim.zig");
+const tui = @import("tui/tui.zig");
+const DirectoryTree = tui.DirectoryTree;
+const Editor = tui.Editor;
+const List = tui.List;
+const TextArea = Editor.TextArea;
+const NotesList = tui.NotesList;
+const Vim = TextArea.Vim;
 
 const keymap_path = "keymap/default";
 

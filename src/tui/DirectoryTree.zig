@@ -11,6 +11,7 @@ const List = @import("List.zig");
 const NotesList = @import("NotesList.zig");
 const theme = @import("layout/theme.zig");
 const Icon = theme.Icon;
+const ScrollView = @import("layout/ScrollView.zig");
 const utils = @import("../utils.zig");
 
 alloc: std.mem.Allocator,
@@ -43,7 +44,7 @@ tree_items: std.ArrayList(*TreeItem) = .empty,
 /// Will be obsolete as soon as directory caches are in place.
 expanded_dirs: std.ArrayList([]const u8) = .empty,
 
-scroll_view: vx.widgets.ScrollView,
+scroll_view: ScrollView,
 
 win: ?vx.Window = null,
 
@@ -127,7 +128,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryT
         .app = app,
         .name = title,
         .cell = try .init(alloc),
-        .scroll_view = .{},
+        .scroll_view = .init(),
     };
 
     self.cell.setWidth(self.default_width);
@@ -169,14 +170,26 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
 
 pub fn draw(self: *DirectoryTree, win: vx.Window) void {
     const opts = self.cell.getChild();
-    const child_win = win.child(opts);
+    var child_win = win.child(opts);
+
+    self.scroll_view.view.draw(child_win, .{
+        .cols = self.cell.width,
+        .rows = self.tree_items.items.len,
+    });
 
     if (self.win == null) {
         self.win = child_win;
     }
 
-    var index: isize = 0;
-    for (self.tree_items.items) |item| {
+    const top_vis_row = self.scroll_view.view.scroll.y;
+    const bottom_vis_row = @min(
+        top_vis_row + child_win.height,
+        self.tree_items.items.len,
+    );
+
+    var i: usize = 0;
+    for (self.tree_items.items[top_vis_row..bottom_vis_row]) |item| {
+        const term_row = top_vis_row + i;
         item.data.cell.setHeight(self.default_item_height);
         var child_opts = item.data.cell.getChild();
         // reset border for each tree item
@@ -185,15 +198,18 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
         _ = child_win.child(child_opts);
 
         var style: vx.Cell.Style = .{};
-        if (index == self.selected_index) {
+        if (term_row == self.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        const row: u16 = @intCast(index + item.data.cell.height - 1);
-        self.writeLine(item, row, self.cell.width, style);
-        item.data.index = @intCast(index);
-        index += 1;
+        self.writeLine(item, @intCast(term_row), self.cell.width, style);
+        item.data.index = @intCast(term_row);
+        i += 1;
     }
+
+    self.scroll_view.height = child_win.height;
+    self.scroll_view.setRow(@intCast(self.selected_index));
+    self.scroll_view.reposition();
 
     // @todo find out why cursor doesn't render on keypress event
     //if (self.app.curevent == .key_press) {
@@ -214,11 +230,12 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
     var w: usize = 0;
 
     const selected_dir = self.selectedDir();
+    var view = self.scroll_view.view;
 
     if (self.win) |win| {
         // indentation
         for (1..item.data.list_pad_left + item.level) |_| {
-            Cell.writeStr(win, &col, row, item.indent_char, style);
+            Cell.writeStr(win, &view, &col, row, item.indent_char, style);
         }
 
         // toggle arrow
@@ -238,8 +255,8 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
             arrow_style.bg = theme.Color.List.selection_bg;
         }
 
-        Cell.writeStr(win, &col, row, has_children, arrow_style);
-        Cell.writeStr(win, &col, row, " ", style);
+        Cell.writeStr(win, &view, &col, row, has_children, arrow_style);
+        Cell.writeStr(win, &view, &col, row, " ", style);
 
         // folder icon
         var icon_style: vx.Style = .{ .fg = theme.Color.List.dir_fg };
@@ -253,28 +270,33 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
             dir_icon = Icon.getNerd(.dir_open);
             has_children = Icon.getAlt(.dir_open);
         }
+
         if (self.is_insert and selected_dir == item) {
             dir_icon = Icon.getNerd(.pen);
         }
 
-        Cell.writeStr(win, &col, row, dir_icon, icon_style);
-        Cell.writeStr(win, &col, row, " ", style);
+        Cell.writeStr(win, &view, &col, row, dir_icon, icon_style);
+        Cell.writeStr(win, &view, &col, row, " ", style);
 
         // switch to input value when we're renaming
         if (self.is_insert and item.data.edit_info != null) {
             for (item.data.input_val.items) |char| {
-                win.writeCell(col, row, Cell.get(char.grapheme, char.width, style));
+                win.writeCell(
+                    col,
+                    @intCast(item.data.getTermRow(view.scroll.y)),
+                    Cell.get(char.grapheme, char.width, style),
+                );
                 col += 1;
             }
         } else {
-            Cell.writeStr(win, &col, row, item.data.name, style);
+            Cell.writeStr(win, &view, &col, row, item.data.name, style);
         }
 
         w = col;
 
         // pad to end of column
         while (col < width) {
-            Cell.writeStr(win, &col, row, " ", style);
+            Cell.writeStr(win, &view, &col, row, " ", style);
         }
     }
 
@@ -472,7 +494,7 @@ pub fn createListItem(self: *DirectoryTree) !void {
 /// for the item.
 pub fn initEditListItem(self: *DirectoryTree) !void {
     const dir = self.selectedDir() orelse return;
-    try dir.data.edit(self.alloc, self.win);
+    try dir.data.edit(self.alloc, self.win, self.scroll_view.view.scroll.y);
     self.app.setMode(.insert);
 }
 

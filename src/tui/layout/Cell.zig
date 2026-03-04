@@ -120,12 +120,23 @@ pub fn get(grapheme: []const u8, width: u8, style: vx.Style) vx.Cell {
     };
 }
 
-pub inline fn writeStr(win: vx.Window, col: *u16, row: u16, value: []const u8, style: vx.Style) void {
+pub inline fn writeStr(
+    win: vx.Window,
+    view: ?*vx.widgets.ScrollView,
+    col: *u16,
+    row: u16,
+    value: []const u8,
+    style: vx.Style,
+) void {
     var cmd_iter = vx.unicode.graphemeIterator(value);
     while (cmd_iter.next()) |grapheme| {
         const g = grapheme.bytes(value);
         const w: u8 = @intCast(win.gwidth(g));
-        win.writeCell(col.*, row, Cell.get(g, w, style));
+        if (view) |v| {
+            v.writeCell(win, col.*, row, Cell.get(g, w, style));
+        } else {
+            win.writeCell(col.*, row, Cell.get(g, w, style));
+        }
         col.* += @intCast(w);
     }
 }
@@ -138,7 +149,7 @@ pub fn drawHeader(win: vx.Window, title: []const u8, col: u16, is_focused: bool)
         style = .{ .fg = theme.Color.CellHeader.fg_focused };
     }
 
-    Cell.writeStr(win, &c, 0, " ", .{});
-    Cell.writeStr(win, &c, 0, title, style);
-    Cell.writeStr(win, &c, 0, " ", .{});
+    Cell.writeStr(win, null, &c, 0, " ", .{});
+    Cell.writeStr(win, null, &c, 0, title, style);
+    Cell.writeStr(win, null, &c, 0, " ", .{});
 }

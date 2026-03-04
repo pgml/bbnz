@@ -9,6 +9,7 @@ const dmp = @import("diffmatchpatch");
 pub const App = @import("../../../App.zig");
 pub const Buffer = @import("Buffer.zig");
 pub const Vim = @import("Vim.zig");
+pub const ScrollView = @import("../../layout/ScrollView.zig");
 pub const Theme = @import("../../layout/theme.zig");
 pub const utils = @import("../../../utils.zig");
 
@@ -26,7 +27,7 @@ win: ?vx.Window = null,
 
 is_focucsed: bool = false,
 
-scroll_view: ?*vx.widgets.ScrollView = null,
+scroll_view: ?*ScrollView = null,
 
 /// The textarea's width
 width: u16 = 0,
@@ -173,7 +174,7 @@ pub fn draw(self: *TextArea) !void {
     }
 
     const win: vx.Window = self.win.?;
-    const view: *vx.widgets.ScrollView = self.scroll_view.?;
+    const view: *vx.widgets.ScrollView = &self.scroll_view.?.view;
 
     if (self.width != win.width or self.height != win.height) {
         self.width = win.width;
@@ -661,21 +662,12 @@ pub fn deleteNLines(self: *TextArea, n: usize) void {
     }
 }
 
-/// Repositions the view to the cursor position, ensuring it's always
-/// in the viewport.
 pub fn repositionView(self: *TextArea) void {
     const buf: *Buffer = self.curBuf();
 
     if (self.scroll_view) |view| {
-        const min = view.scroll.y;
-        const max = min + self.height - 1;
-        const row: u32 = @intCast(buf.row);
-
-        if (buf.row < min) {
-            view.scroll.y -= min - row;
-        } else if (buf.row > max) {
-            view.scroll.y += row - max;
-        }
+        view.setRow(buf.row);
+        view.reposition();
     }
 }
 
@@ -907,11 +899,11 @@ pub fn halfPageUp(self: *TextArea) void {
     const new_row = std.math.clamp(row - half_height, 0, buf.numRows() - 1);
 
     if (self.scroll_view) |view| {
-        const min: i32 = @intCast(view.scroll.y);
+        const min: i32 = @intCast(view.view.scroll.y);
 
         if (new_row <= min) {
             if (min > half_height) {
-                view.scroll.y -= @intCast(half_height);
+                view.view.scroll.y -= @intCast(half_height);
             } else {
                 self.goToTop();
             }
@@ -933,11 +925,11 @@ pub fn halfPageDown(self: *TextArea) void {
     const new_row = std.math.clamp(buf.row + half_height, 0, buf.numRows() - 1);
 
     if (self.scroll_view) |view| {
-        const min = view.scroll.y;
+        const min = view.view.scroll.y;
         const max = min + self.height - 1;
 
         if (new_row >= max) {
-            view.scroll.y += half_height;
+            view.view.scroll.y += half_height;
         }
 
         if (max == buf.numRows() - 1) {
@@ -1256,7 +1248,7 @@ pub fn getTermRow(self: TextArea) usize {
     var row: usize = 0;
     if (self.scroll_view) |view| {
         row = @intCast(buf.row);
-        return @intCast(row - view.scroll.y);
+        return @intCast(row - view.view.scroll.y);
     }
     return row;
 }

@@ -11,6 +11,7 @@ const List = @import("List.zig");
 const log = @import("../log.zig");
 const theme = @import("layout/theme.zig");
 const Icon = theme.Icon;
+const ScrollView = @import("layout/ScrollView.zig");
 const utils = @import("../utils.zig");
 
 alloc: std.mem.Allocator,
@@ -51,7 +52,7 @@ DirtyBuffers: std.ArrayList(Buffer) = .empty,
 /// Buffers holds all the open buffers
 Buffers: std.ArrayList(*Buffer) = .empty,
 
-scroll_view: vx.widgets.ScrollView,
+scroll_view: ScrollView,
 
 win: ?vx.Window = null,
 
@@ -81,7 +82,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
         .app = app,
         .name = title,
         .cell = try .init(alloc),
-        .scroll_view = .{},
+        .scroll_view = .init(),
     };
 
     self.cell.setWidth(self.default_width);
@@ -112,12 +113,24 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
     const opts = self.cell.getChild();
     const child_win = win.child(opts);
 
+    self.scroll_view.view.draw(child_win, .{
+        .cols = self.cell.width,
+        .rows = self.note_items.items.len,
+    });
+
     if (self.win == null) {
         self.win = child_win;
     }
 
-    var index: isize = 0;
-    for (self.note_items.items) |item| {
+    const top_vis_row = self.scroll_view.view.scroll.y;
+    const bottom_vis_row = @min(
+        top_vis_row + child_win.height,
+        self.note_items.items.len,
+    );
+
+    var i: usize = 0;
+    for (self.note_items.items[top_vis_row..bottom_vis_row]) |item| {
+        const term_row: usize = top_vis_row + i;
         item.data.cell.setHeight(self.default_item_height);
         var child_opts = item.data.cell.getChild();
         // reset border for each tree item
@@ -126,19 +139,22 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
         _ = child_win.child(child_opts);
 
         var style: vx.Cell.Style = .{};
-        if (index == self.selected_index) {
+        if (term_row == self.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        const row: u16 = @intCast(index + item.data.cell.height - 1);
-        self.writeLine(item, row, self.cell.width, style);
-        item.data.index = @intCast(index);
-        index += 1;
+        self.writeLine(item, @intCast(term_row), self.cell.width, style);
+        item.data.index = @intCast(term_row);
+        i += 1;
 
         if (item.data.edit_info) |pos| {
             self.win.?.showCursor(pos.col, pos.row);
         }
     }
+
+    self.scroll_view.height = child_win.height;
+    self.scroll_view.setRow(@intCast(self.selected_index));
+    self.scroll_view.reposition();
 }
 
 pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
@@ -150,8 +166,10 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
     var col: u16 = 0;
     var w: usize = 0;
 
+    var view = self.scroll_view.view;
+
     if (self.win) |win| {
-        Cell.writeStr(win, &col, row, " ", style);
+        Cell.writeStr(win, &view, &col, row, " ", style);
 
         var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
         if (self.selectedNote()) |selected_note| {
@@ -166,24 +184,28 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
                 note_icon = Icon.getNerd(.pen);
             }
         }
-        Cell.writeStr(win, &col, row, note_icon, icon_style);
-        Cell.writeStr(win, &col, row, " ", style);
+        Cell.writeStr(win, &view, &col, row, note_icon, icon_style);
+        Cell.writeStr(win, &view, &col, row, " ", style);
 
         // switch to input value when we're renaming
         if (self.is_insert and item.data.edit_info != null) {
             for (item.data.input_val.items) |char| {
-                win.writeCell(col, row, Cell.get(char.grapheme, char.width, style));
+                win.writeCell(
+                    col,
+                    @intCast(item.data.getTermRow(view.scroll.y)),
+                    Cell.get(char.grapheme, char.width, style),
+                );
                 col += 1;
             }
         } else {
-            Cell.writeStr(win, &col, row, item.data.getName(false), style);
+            Cell.writeStr(win, &view, &col, row, item.data.getName(false), style);
         }
 
         w = col;
 
         // pad the rest of the line to make the selection expand to the whole row
         while (col < width) {
-            Cell.writeStr(win, &col, row, " ", style);
+            Cell.writeStr(win, &view, &col, row, " ", style);
         }
     }
 
@@ -286,7 +308,7 @@ pub fn createListItem(self: *NotesList) !void {
 /// for the item.
 pub fn initEditListItem(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
-    try note.data.edit(self.alloc, self.win);
+    try note.data.edit(self.alloc, self.win, self.scroll_view.view.scroll.y);
     // @todo save previous selected row so we can go back to that row
     // after canceling.
     //note.data.edit_info.?.prev_row = @intCast(self.selected_index);

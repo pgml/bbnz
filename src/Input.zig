@@ -365,18 +365,20 @@ const KeyMap = struct {
             std.mem.indexOf(u8, keybind, "esc") == null and
             std.mem.indexOf(u8, keybind, "enter") == null)
         {
+            // This is basically the leader key
+            // @todo: make it configurable.
             if (std.mem.indexOf(u8, keybind, "space") != null) {
-                // This is basically the leader key
-                // @todo: make it configurable.
                 try self.seq_keys.append(self.alloc, keybind[0..5]);
-            } else if (std.mem.indexOf(u8, keybind, "-") != null) {
-                // Every ctrl-, alt-, etc.. combo - since these combos
-                // are written as C-, A-, M- getting the first three characters
-                // (which would be the modifier + key) is sufficient.
+            }
+            // Every ctrl-, alt-, etc.. combo - since these combos
+            // are written as C-, A-, M- getting the first three characters
+            // (which would be the modifier + key) is sufficient.
+            else if (std.mem.indexOf(u8, keybind, "-") != null) {
                 try self.seq_keys.append(self.alloc, keybind[0..3]);
-            } else {
-                // For every other motions we need every character but
-                // the last one so we now when to wait for another keypress.
+            }
+            // For every other motions we need every character but
+            // the last one so we now when to wait for another keypress.
+            else {
                 try self.seq_keys.append(self.alloc, keybind[0 .. keybind.len - 1]);
             }
         }

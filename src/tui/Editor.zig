@@ -7,6 +7,7 @@ const App = @import("../App.zig");
 const Config = App.Config;
 
 const Cell = @import("layout/Cell.zig");
+const ScrollView = @import("layout/ScrollView.zig");
 const log = @import("../log.zig");
 pub const TextArea = @import("widgets/TextArea/TextArea.zig");
 pub const Buffer = TextArea.Buffer;
@@ -26,7 +27,7 @@ default_width: u16 = 0,
 
 default_height: u16 = 0,
 
-scroll_view: vx.widgets.ScrollView,
+scroll_view: ScrollView,
 
 textarea: TextArea,
 
@@ -43,7 +44,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
         .name = title,
         .cell = try .init(alloc),
         .textarea = try .init(alloc, app),
-        .scroll_view = .{},
+        .scroll_view = .init(),
     };
 
     self.cell.setWidth(self.default_width);
@@ -82,11 +83,11 @@ pub fn draw(self: *Editor, win: vx.Window) void {
 
     if (self.textarea.hasBuffers()) {
         const buf: *Buffer = self.textarea.curBuf();
-        self.scroll_view.draw(child_win, .{
+        self.scroll_view.view.draw(child_win, .{
             .cols = self.textarea.width,
             .rows = buf.numRows(),
         });
-
+        self.scroll_view.height = self.textarea.height;
         self.textarea.scroll_view = &self.scroll_view;
 
         const ln: vx.widgets.LineNumbers = .{
@@ -101,7 +102,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .y_off = self.cell.offset_y + 1,
             .width = gutter_width,
             .height = self.textarea.height,
-        }), self.scroll_view.scroll.y);
+        }), self.scroll_view.view.scroll.y);
 
         self.textarea.draw() catch return;
     }
@@ -129,7 +130,11 @@ pub fn restore(self: *Editor) !void {
 
 pub fn openBuf(self: *Editor, path: []const u8) !void {
     try self.textarea.openBuf(path);
-    self.textarea.repositionView();
+
+    if (self.textarea.scroll_view) |view| {
+        view.setRow(self.textarea.curBuf().row);
+        view.reposition();
+    }
     // get breadcrumb
     var bc_buf: [256]u8 = undefined;
     self.alloc.free(self.cell.title);

@@ -106,11 +106,11 @@ pub const Column = struct {
         const child_win = win.child(col_opts);
 
         // Display current mode
-        Cell.writeStr(child_win, &col, 0, content, .{});
+        Cell.writeStr(child_win, null, &col, 0, content, .{});
 
         // Display user input prompt
         for (self.value.items) |char| {
-            Cell.writeStr(child_win, &col, 0, char.grapheme, .{});
+            Cell.writeStr(child_win, null, &col, 0, char.grapheme, .{});
         }
 
         self.col = @intCast(col);

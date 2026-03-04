@@ -134,11 +134,16 @@ pub const Item = struct {
     /// current item index representing the terminal row and `edit_pos.col`
     /// to the length of the item representing the terminal column.
     /// Populates `input_val` from `name`.
-    pub fn edit(self: *Item, alloc: std.mem.Allocator, win: ?vx.Window) !void {
+    pub fn edit(
+        self: *Item,
+        alloc: std.mem.Allocator,
+        win: ?vx.Window,
+        bottom_row: usize,
+    ) !void {
         self.input_val = try List.buildNameArray(alloc, self.getName(false), win);
         self.edit_info = .{
             .col = @intCast(self.width),
-            .row = @intCast(self.index),
+            .row = @intCast(self.getTermRow(bottom_row)),
         };
     }
 
@@ -162,6 +167,12 @@ pub const Item = struct {
 
         const joined = try std.mem.join(alloc, "", path_list.items);
         return joined;
+    }
+
+    /// Get the terminal row for the current cursor position.
+    pub fn getTermRow(self: Item, bottom_row: usize) usize {
+        const row: usize = self.index;
+        return @intCast(row - bottom_row);
     }
 
     pub fn deinit(self: *Item, alloc: std.mem.Allocator) void {

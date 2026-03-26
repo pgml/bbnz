@@ -342,10 +342,11 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
     var i: usize = 0;
     for (tmp_dir_entry) |entry| {
         const tree_item = try self.makeTreeItemFromEntry(entry, index, item.level + 1);
-        try self.tree_items.insert(self.alloc, index + 1, tree_item);
+        const insert_index = index + 1;
+        try self.tree_items.insert(self.alloc, insert_index, tree_item);
         // track the child directories so that we can free them properly
         // when we collapse this directory.
-        try item.children.append(self.alloc, index + i);
+        try item.children.append(self.alloc, insert_index);
         i += 1;
     }
 }
@@ -593,15 +594,17 @@ pub fn cancelEdit(self: *DirectoryTree) !void {
 
 fn expandItemsFromConfig(self: *DirectoryTree) !void {
     var meta = self.app.config.meta_infos;
-    var i: usize = 0;
+    var i: usize = self.tree_items.items.len;
 
-    for (self.tree_items.items) |tree_item| {
+    while (i > 0) {
+        i -= 1;
+        const tree_item = self.tree_items.items[i];
         if (meta.files_info.get(tree_item.data.path)) |file_info| {
-            if (file_info.is_expanded) {
-                try self.expandTreeItem(i);
+            if (!file_info.is_expanded) {
+                continue;
             }
+            try self.expandTreeItem(i);
         }
-        i += 1;
     }
 }
 

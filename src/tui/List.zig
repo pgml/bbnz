@@ -4,6 +4,7 @@ const std = @import("std");
 const vx = @import("vaxis");
 
 const Cell = @import("../tui/layout/Cell.zig");
+const ScrollView = @import("../tui/layout/ScrollView.zig");
 const fs = @import("../fs.zig");
 
 /// Terminal position
@@ -201,4 +202,21 @@ pub fn buildNameArray(
     }
 
     return list;
+}
+
+/// Shows or hides the vertical scrollbar of the given `scroll_view` depending
+/// on whether the list content is larger than the view's height.
+pub fn toggleVbar(
+    scroll_view: *ScrollView,
+    view_height: usize,
+    item_height: usize,
+) void {
+    // take border top and bottom into account
+    const height = if (view_height > 2) view_height - 2 else view_height;
+
+    if (height > item_height) {
+        scroll_view.hideScrollBar();
+    } else {
+        scroll_view.showScrollBar();
+    }
 }

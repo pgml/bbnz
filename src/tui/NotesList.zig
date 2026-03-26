@@ -52,7 +52,7 @@ DirtyBuffers: std.ArrayList(Buffer) = .empty,
 /// Buffers holds all the open buffers
 Buffers: std.ArrayList(*Buffer) = .empty,
 
-scroll_view: ScrollView,
+scroll_view: *ScrollView,
 
 win: ?vx.Window = null,
 
@@ -82,7 +82,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
         .app = app,
         .name = title,
         .cell = try .init(alloc),
-        .scroll_view = .init(),
+        .scroll_view = try .init(self.alloc),
     };
 
     self.cell.setWidth(self.default_width);
@@ -103,6 +103,10 @@ pub fn update(self: *NotesList, event: App.Event) !void {
                 try note.data.input(key, self.alloc);
             }
         },
+        .winsize => |ws| {
+            const sb_height = self.app.status_bar.cell.height;
+            List.toggleVbar(self.scroll_view, ws.rows - sb_height, self.listLen());
+        },
         else => {},
     }
 
@@ -117,10 +121,9 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
         .cols = self.cell.width,
         .rows = self.note_items.items.len,
     });
+    //self.toggleVbar(child_win.height);
 
-    if (self.win == null) {
-        self.win = child_win;
-    }
+    self.win = child_win;
 
     const top_vis_row = self.scroll_view.view.scroll.y;
     const bottom_vis_row = @min(
@@ -465,5 +468,6 @@ fn freeNotes(self: *NotesList) void {
 
 pub fn deinit(self: *NotesList) void {
     self.freeNotes();
+    self.alloc.destroy(self.scroll_view);
     self.alloc.free(self.current_path);
 }

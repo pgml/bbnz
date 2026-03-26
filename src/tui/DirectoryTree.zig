@@ -44,7 +44,7 @@ tree_items: std.ArrayList(*TreeItem) = .empty,
 /// Will be obsolete as soon as directory caches are in place.
 expanded_dirs: std.ArrayList([]const u8) = .empty,
 
-scroll_view: ScrollView,
+scroll_view: *ScrollView,
 
 win: ?vx.Window = null,
 
@@ -128,7 +128,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryT
         .app = app,
         .name = title,
         .cell = try .init(alloc),
-        .scroll_view = .init(),
+        .scroll_view = try .init(self.alloc),
     };
 
     self.cell.setWidth(self.default_width);
@@ -156,6 +156,10 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
                 try dir.data.input(key, self.alloc);
             }
         },
+        .winsize => |ws| {
+            const sb_height = self.app.status_bar.cell.height;
+            List.toggleVbar(self.scroll_view, ws.rows - sb_height, self.treeLen());
+        },
         else => {},
     }
 
@@ -177,9 +181,7 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
         .rows = self.tree_items.items.len,
     });
 
-    if (self.win == null) {
-        self.win = child_win;
-    }
+    self.win = child_win;
 
     const top_vis_row = self.scroll_view.view.scroll.y;
     const bottom_vis_row = @min(
@@ -756,6 +758,7 @@ pub fn deinit(self: *DirectoryTree) void {
         self.alloc.destroy(entry);
     }
 
+    self.alloc.destroy(self.scroll_view);
     self.tree_items.deinit(self.alloc);
     self.alloc.destroy(self.cell);
 }

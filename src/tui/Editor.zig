@@ -27,7 +27,7 @@ default_width: u16 = 0,
 
 default_height: u16 = 0,
 
-scroll_view: ScrollView,
+scroll_view: *ScrollView,
 
 textarea: TextArea,
 
@@ -44,7 +44,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
         .name = title,
         .cell = try .init(alloc),
         .textarea = try .init(alloc, app),
-        .scroll_view = .init(),
+        .scroll_view = try .init(self.alloc),
     };
 
     self.cell.setWidth(self.default_width);
@@ -88,7 +88,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .rows = buf.numRows(),
         });
         self.scroll_view.height = self.textarea.height;
-        self.textarea.scroll_view = &self.scroll_view;
+        self.textarea.scroll_view = self.scroll_view;
 
         const ln: vx.widgets.LineNumbers = .{
             .num_lines = buf.numRows() +| 1,
@@ -210,5 +210,6 @@ pub fn setFocus(self: *Editor, f: bool) void {
 pub fn deinit(self: *Editor) void {
     self.alloc.free(self.cell.title);
     self.alloc.destroy(self.cell);
+    self.alloc.destroy(self.scroll_view);
     self.textarea.deinit();
 }

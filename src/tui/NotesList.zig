@@ -18,27 +18,7 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
-/// The name of the DirectoryTree.
-/// We use this as the default column title.
-name: []const u8 = "",
-
-/// The layout cell/column
-cell: *Cell,
-
-/// default width of the directory tree column.
-default_width: u16 = 30,
-
-/// default heigh of the directory tree column.
-default_height: u16 = 0,
-
-/// default height of a single directory item
-default_item_height: u16 = 1,
-
-/// The list index of the selected tree item/directory.
-selected_index: isize = 0,
-
-/// A flat list of all visible directories.
-note_items: std.ArrayList(*NoteItem) = .empty,
+list: *List,
 
 /// The directory path of the currently displayed notes.
 /// This path might not match the directory that is selected in the
@@ -52,21 +32,9 @@ DirtyBuffers: std.ArrayList(Buffer) = .empty,
 /// Buffers holds all the open buffers
 Buffers: std.ArrayList(*Buffer) = .empty,
 
-scroll_view: *ScrollView,
-
-win: ?vx.Window = null,
-
-is_insert: bool = false,
-
 pub const NoteItem = struct {
     /// General list data
     data: List.Item,
-
-    /// Stores the rendered toggle arrow icon
-    icon: []const u8 = "",
-
-    // Stores the rendered toggle arrow icon
-    toggle_arrow: []const u8 = "",
 
     pub fn deinit(self: *NoteItem, alloc: std.mem.Allocator) void {
         alloc.free(self.data.path);
@@ -80,13 +48,8 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
     self.* = .{
         .alloc = alloc,
         .app = app,
-        .name = title,
-        .cell = try .init(alloc),
-        .scroll_view = try .init(self.alloc),
+        .list = try .init(alloc, title),
     };
-
-    self.cell.setWidth(self.default_width);
-    self.cell.title = title;
 
     return self;
 }
@@ -94,84 +57,76 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
 pub fn update(self: *NotesList, event: App.Event) !void {
     switch (event) {
         .key_press => |key| {
-            if (!self.cell.isFocused() or self.app.mode != .insert) {
+            if (!self.list.isFocused() or self.app.mode != .insert) {
                 return;
             }
 
-            if (self.is_insert) {
+            if (self.list.is_insert) {
                 const note = self.selectedNote() orelse return;
                 try note.data.input(key, self.alloc);
             }
         },
         .winsize => |ws| {
             const sb_height = self.app.status_bar.cell.height;
-            List.toggleVbar(self.scroll_view, ws.rows - sb_height, self.listLen());
+            self.list.toggleVbar(ws.rows - sb_height, self.list.numItems());
         },
         else => {},
     }
 
-    self.is_insert = self.app.mode == .insert and self.cell.isFocused();
+    self.list.is_insert = self.app.mode == .insert and self.list.isFocused();
 }
 
 pub fn draw(self: *NotesList, win: vx.Window) void {
-    const opts = self.cell.getChild();
+    const opts = self.list.cell.getChild();
     const child_win = win.child(opts);
 
-    self.scroll_view.view.draw(child_win, .{
-        .cols = self.cell.width,
-        .rows = self.note_items.items.len,
-    });
-    //self.toggleVbar(child_win.height);
+    self.list.draw(child_win);
 
-    self.win = child_win;
-
-    const top_vis_row = self.scroll_view.view.scroll.y;
-    const bottom_vis_row = @min(
-        top_vis_row + child_win.height,
-        self.note_items.items.len,
-    );
+    const top_vis_row = self.list.getTopVisRow();
+    const bottom_vis_row = self.list.getBottomVisRow();
 
     var i: usize = 0;
-    for (self.note_items.items[top_vis_row..bottom_vis_row]) |item| {
+    for (self.list.getItemsSlice()[top_vis_row..bottom_vis_row]) |item| {
+        const note: *NoteItem = @ptrCast(@alignCast(item));
         const term_row: usize = top_vis_row + i;
-        item.data.cell.setHeight(self.default_item_height);
-        var child_opts = item.data.cell.getChild();
+        note.data.cell.setHeight(self.list.default_item_height);
+        var child_opts = note.data.cell.getChild();
         // reset border for each tree item
         child_opts.border = .{};
 
         _ = child_win.child(child_opts);
 
         var style: vx.Cell.Style = .{};
-        if (term_row == self.selected_index) {
+        if (term_row == self.list.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        self.writeLine(item, @intCast(term_row), self.cell.width, style);
-        item.data.index = @intCast(term_row);
+        self.writeLine(note, @intCast(term_row), self.list.getWidth(), style);
+        note.data.index = @intCast(term_row);
         i += 1;
 
-        if (item.data.edit_info) |pos| {
-            self.win.?.showCursor(pos.col, pos.row);
+        if (note.data.edit_info) |pos| {
+            self.list.win.?.showCursor(pos.col, pos.row);
         }
     }
 
-    self.scroll_view.height = child_win.height;
-    self.scroll_view.setRow(@intCast(self.selected_index));
-    self.scroll_view.reposition();
+    self.list.scroll_view.height = child_win.height;
+    self.list.scroll_view.setRow(@intCast(self.list.selected_index));
+    self.list.scroll_view.reposition();
 }
 
 pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
-    const col: u16 = @intCast(self.cell.offset_x + 1);
-    Cell.drawHeader(win, self.cell.title, col, self.cell.isFocused());
+    const col: u16 = @intCast(self.list.getOffsetX() + 1);
+    Cell.drawHeader(win, self.list.getTitle(), col, self.list.isFocused());
 }
 
 fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
     var w: usize = 0;
 
-    var view = self.scroll_view.view;
+    var view = self.list.scroll_view.view;
 
-    if (self.win) |win| {
+    if (self.list.win) |win| {
         Cell.writeStr(win, &view, &col, row, " ", style);
 
         var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
@@ -183,7 +138,7 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
         }
         var note_icon = Icon.getNerd(.note);
         if (self.selectedNote()) |note| {
-            if (self.is_insert and note == item) {
+            if (self.list.is_insert and note == item) {
                 note_icon = Icon.getNerd(.pen);
             }
         }
@@ -191,7 +146,7 @@ fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.C
         Cell.writeStr(win, &view, &col, row, " ", style);
 
         // switch to input value when we're renaming
-        if (self.is_insert and item.data.edit_info != null) {
+        if (self.list.is_insert and item.data.edit_info != null) {
             for (item.data.input_val.items) |char| {
                 win.writeCell(
                     col,
@@ -237,11 +192,11 @@ pub fn getNotes(self: *NotesList, path: []const u8) !void {
     );
 
     self.freeNotes();
-    self.note_items = .empty;
+    self.list.items = .empty;
 
     for (tmp_note_entries) |entry| {
         const note_item = try self.makeNoteItemFromEntry(entry);
-        try self.note_items.append(self.alloc, note_item);
+        try self.list.items.append(self.alloc, note_item);
     }
 }
 
@@ -249,7 +204,7 @@ fn allocNoteItem(self: *NotesList, item: NoteItem) !*NoteItem {
     const note_item = try self.alloc.create(NoteItem);
 
     const cell: *Cell = try .init(self.alloc);
-    cell.setHeight(self.default_item_height);
+    cell.setHeight(self.list.default_item_height);
 
     note_item.* = .{
         .data = .{
@@ -288,21 +243,14 @@ fn makeNoteItemFromEntry(self: *NotesList, item: fs.Notes.Entry) !*NoteItem {
     });
 }
 
-fn getListItem(self: NotesList, index: usize) ?*NoteItem {
-    if (index >= self.note_items.items.len) {
-        return null;
-    }
-    return self.note_items.items[index];
-}
-
 /// Inserts a temporary item into the directory tree in insert mode
 /// as a child of the selected directory and selects it.
 pub fn createListItem(self: *NotesList) !void {
     const list_item = try self.makeNoteItem();
 
-    try self.note_items.append(self.alloc, list_item);
-    list_item.data.index = self.note_items.items.len - 1;
-    self.selected_index = @intCast(list_item.data.index);
+    try self.list.items.append(self.alloc, list_item);
+    list_item.data.index = self.list.numItems();
+    self.list.selected_index = @intCast(list_item.data.index);
     try self.initEditListItem();
 }
 
@@ -311,11 +259,21 @@ pub fn createListItem(self: *NotesList) !void {
 /// for the item.
 pub fn initEditListItem(self: *NotesList) !void {
     const note = self.selectedNote() orelse return;
-    try note.data.edit(self.alloc, self.win, self.scroll_view.view.scroll.y);
+    try note.data.edit(
+        self.alloc,
+        self.list.win,
+        self.list.scroll_view.view.scroll.y,
+    );
     // @todo save previous selected row so we can go back to that row
     // after canceling.
     //note.data.edit_info.?.prev_row = @intCast(self.selected_index);
     self.app.setMode(.insert);
+}
+
+inline fn getItem(self: NotesList, index: usize) ?*NoteItem {
+    const item = self.list.getItem(index) orelse return null;
+    const note_item: *NoteItem = @ptrCast(@alignCast(item));
+    return note_item;
 }
 
 /// Confirms the edited list item.
@@ -379,42 +337,22 @@ pub fn cancelEdit(self: *NotesList) !void {
     self.app.setMode(.normal);
 
     if (note.data.is_temporary) {
-        const item = self.note_items.orderedRemove(note.data.index);
-        item.deinit(self.alloc);
+        const item = self.list.items.orderedRemove(note.data.index);
+        const n: *NoteItem = @ptrCast(@alignCast(item));
+        n.deinit(self.alloc);
 
-        self.note_items.shrinkAndFree(self.alloc, self.note_items.items.len);
-        self.selected_index = prev_row;
-        self.alloc.destroy(item);
+        self.list.items.shrinkAndFree(self.alloc, self.list.len());
+        self.list.selected_index = prev_row;
+        self.alloc.destroy(n);
     }
 }
 
 pub fn selectedNote(self: NotesList) ?*NoteItem {
-    if (self.getListItem(@intCast(self.selected_index))) |note| {
+    if (self.getItem(@intCast(self.list.selected_index))) |item| {
+        const note: *NoteItem = @ptrCast(@alignCast(item));
         return note;
     }
     return null;
-}
-
-pub fn focus(self: *NotesList) void {
-    self.cell.focus();
-}
-
-pub fn blur(self: *NotesList) void {
-    self.cell.blur();
-}
-
-pub fn setFocus(self: *NotesList, f: bool) void {
-    self.cell.setFocus(f);
-}
-
-pub fn cmdLineDown(self: *NotesList) void {
-    self.selected_index += 1;
-    self.clampIndex();
-}
-
-pub fn cmdLineUp(self: *NotesList) void {
-    self.selected_index -= 1;
-    self.clampIndex();
 }
 
 pub fn cmdSelectNote(self: *NotesList) void {
@@ -434,40 +372,18 @@ fn updateLastNote(self: *NotesList) void {
     self.app.config.meta_infos.write() catch return;
 }
 
-pub fn cmdGoToTop(self: *NotesList) void {
-    self.selected_index = 0;
-}
-
-pub fn cmdGoToBottom(self: *NotesList) void {
-    self.selected_index = @intCast(self.listLen());
-}
-
-fn clampIndex(self: *NotesList) void {
-    self.selected_index = std.math.clamp(
-        self.selected_index,
-        0,
-        self.listLen(),
-    );
-}
-
-fn listLen(self: NotesList) usize {
-    var list_len = self.note_items.items.len;
-    if (list_len > 0) {
-        list_len -= 1;
-    }
-    return list_len;
-}
-
 fn freeNotes(self: *NotesList) void {
-    for (self.note_items.items) |notes| {
-        notes.deinit(self.alloc);
-        self.alloc.destroy(notes);
+    for (self.list.items.items) |item| {
+        const note: *NoteItem = @ptrCast(@alignCast(item));
+        note.deinit(self.alloc);
+        self.alloc.destroy(note);
     }
-    self.note_items.deinit(self.alloc);
+    self.list.items.clearAndFree(self.alloc);
 }
 
 pub fn deinit(self: *NotesList) void {
     self.freeNotes();
-    self.alloc.destroy(self.scroll_view);
+    self.list.deinit(self.alloc);
+    self.alloc.destroy(self.list);
     self.alloc.free(self.current_path);
 }

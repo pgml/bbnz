@@ -7,6 +7,34 @@ const Cell = @import("../tui/layout/Cell.zig");
 const ScrollView = @import("../tui/layout/ScrollView.zig");
 const fs = @import("../fs.zig");
 
+/// The name of the DirectoryTree.
+/// We use this as the default column title.
+name: []const u8 = "",
+
+/// The layout cell/column
+cell: *Cell,
+
+/// default width of the list.
+default_width: u16 = 30,
+
+/// default heigh of the list.
+default_height: u16 = 0,
+
+/// default height of a single list item.
+default_item_height: u16 = 1,
+
+/// The list index of the selected tree item.
+selected_index: isize = 0,
+
+/// A flat list of all visible directories.
+items: std.ArrayList(*anyopaque) = .empty,
+
+scroll_view: *ScrollView,
+
+win: ?vx.Window = null,
+
+is_insert: bool = false,
+
 /// Terminal position
 pub const CursorPos = struct {
     prev_row: u16 = 0,
@@ -183,6 +211,178 @@ pub const Item = struct {
     }
 };
 
+pub fn init(alloc: std.mem.Allocator, title: []const u8) !*List {
+    const self = try alloc.create(List);
+
+    self.* = .{
+        .name = title,
+        .cell = try .init(alloc),
+        .scroll_view = try .init(alloc),
+    };
+
+    self.cell.setWidth(self.default_width);
+    self.cell.title = title;
+
+    return self;
+}
+
+pub fn draw(self: *List, win: vx.Window) void {
+    self.scroll_view.view.draw(win, .{
+        .cols = self.getWidth(),
+        .rows = self.len(),
+    });
+    self.win = win;
+}
+
+/// Returns the first visible row of the list.
+pub inline fn getTopVisRow(self: List) usize {
+    return self.scroll_view.view.scroll.y;
+}
+
+/// Returns the last visible row of the list.
+pub inline fn getBottomVisRow(self: List) usize {
+    const win = self.win orelse return 0;
+    return @min(self.getTopVisRow() + win.height, self.len());
+}
+
+pub inline fn getItemsSlice(self: List) []*anyopaque {
+    return self.items.items;
+}
+
+pub inline fn getItem(self: List, index: usize) ?*anyopaque {
+    if (index >= self.len()) {
+        return null;
+    }
+
+    return self.items.items[index];
+}
+
+/// Shows or hides the vertical scrollbar of the given `scroll_view` depending
+/// on whether the list content is larger than the view's height.
+pub fn toggleVbar(self: *List, view_height: usize, item_height: usize) void {
+    // take border top and bottom into account
+    const height = if (view_height > 2) view_height - 2 else view_height;
+
+    if (height > item_height) {
+        self.scroll_view.hideScrollBar();
+    } else {
+        self.scroll_view.showScrollBar();
+    }
+}
+
+/// Selects the first list item.
+pub inline fn goToTop(self: *List) void {
+    if (self.is_insert) {
+        return;
+    }
+    self.selected_index = 0;
+}
+
+/// Selects the last list item.
+pub inline fn goToBottom(self: *List) void {
+    if (self.is_insert) {
+        return;
+    }
+    self.selected_index = @intCast(self.numItems());
+}
+
+/// Moves the selection one line down.
+pub fn lineDown(self: *List) void {
+    if (self.is_insert) {
+        return;
+    }
+    self.selected_index += 1;
+    self.clampIndex();
+}
+
+/// Moves the selection one line up.
+pub fn lineUp(self: *List) void {
+    if (self.is_insert) {
+        return;
+    }
+    self.selected_index -= 1;
+    self.clampIndex();
+}
+
+/// Returns the length of the item array list
+pub fn len(self: List) usize {
+    return self.items.items.len;
+}
+
+/// Returns the number of visible items.
+pub fn numItems(self: List) usize {
+    return if (self.len() > 0)
+        self.len() - 1
+    else
+        self.len();
+}
+
+pub fn clampIndex(self: *List) void {
+    self.selected_index = std.math.clamp(
+        self.selected_index,
+        0,
+        self.numItems(),
+    );
+}
+
+pub fn focus(self: *List) void {
+    self.cell.focus();
+}
+
+pub fn blur(self: *List) void {
+    self.cell.blur();
+}
+
+pub inline fn getTitle(self: List) []const u8 {
+    return self.cell.title;
+}
+
+pub inline fn getWidth(self: List) u16 {
+    return self.cell.width;
+}
+
+pub inline fn setWidth(self: *List, width: u16) void {
+    self.cell.setWidth(width);
+}
+
+pub inline fn getHeight(self: List) u16 {
+    return self.cell.height;
+}
+
+pub inline fn setHeight(self: *List, height: u16) void {
+    self.cell.setHeight(height);
+}
+
+pub inline fn getOffsetY(self: List) i17 {
+    return self.cell.offset_y;
+}
+
+pub inline fn setOffsetY(self: *List, off_y: i17) void {
+    self.cell.setOffsetY(off_y);
+}
+
+pub inline fn getOffsetX(self: List) i17 {
+    return self.cell.offset_x;
+}
+
+pub inline fn setOffsetX(self: *List, off_x: i17) void {
+    self.cell.setOffsetX(off_x);
+}
+
+pub inline fn setFocus(self: *List, f: bool) void {
+    self.cell.setFocus(f);
+}
+
+pub inline fn isFocused(self: List) bool {
+    return self.cell.isFocused();
+}
+
+pub fn deinit(self: *List, alloc: std.mem.Allocator) void {
+    self.items.deinit(alloc);
+    alloc.destroy(self.scroll_view);
+    alloc.destroy(self.cell);
+}
+
 /// Converts a string into an array list of Characters.
 pub fn buildNameArray(
     alloc: std.mem.Allocator,
@@ -202,21 +402,4 @@ pub fn buildNameArray(
     }
 
     return list;
-}
-
-/// Shows or hides the vertical scrollbar of the given `scroll_view` depending
-/// on whether the list content is larger than the view's height.
-pub fn toggleVbar(
-    scroll_view: *ScrollView,
-    view_height: usize,
-    item_height: usize,
-) void {
-    // take border top and bottom into account
-    const height = if (view_height > 2) view_height - 2 else view_height;
-
-    if (height > item_height) {
-        scroll_view.hideScrollBar();
-    } else {
-        scroll_view.showScrollBar();
-    }
 }

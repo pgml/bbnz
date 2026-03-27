@@ -241,14 +241,14 @@ inline fn initComponents(self: *App) !void {
     const win = self.win orelse return;
     const sb_height = self.status_bar.cell.height;
 
-    self.directory_tree.cell.setHeight(win.height - sb_height);
-    self.directory_tree.cell.setOffsetY(0);
+    self.directory_tree.list.setHeight(win.height - sb_height);
+    self.directory_tree.list.setOffsetY(0);
 
-    self.notes_list.cell.setHeight(win.height - sb_height);
-    self.notes_list.cell.setOffsetY(0);
-    self.notes_list.cell.setOffsetX(self.directory_tree.cell.width);
+    self.notes_list.list.setHeight(win.height - sb_height);
+    self.notes_list.list.setOffsetY(0);
+    self.notes_list.list.setOffsetX(self.directory_tree.list.getWidth());
 
-    const xoff = self.notes_list.cell.width + self.directory_tree.cell.width;
+    const xoff = self.notes_list.list.getWidth() + self.directory_tree.list.getWidth();
     self.editor.cell.setHeight(win.height - sb_height);
     self.editor.cell.setOffsetY(0);
     self.editor.cell.setOffsetX(xoff);
@@ -257,8 +257,8 @@ inline fn initComponents(self: *App) !void {
 }
 
 pub fn focusColumn(self: *App, index: u16) void {
-    self.directory_tree.setFocus(index == 1);
-    self.notes_list.setFocus(index == 2);
+    self.directory_tree.list.setFocus(index == 1);
+    self.notes_list.list.setFocus(index == 2);
     self.editor.setFocus(index == 3);
     self.current_column = index;
 }
@@ -294,8 +294,8 @@ pub fn focusPrevColumn(self: *App, cycle: bool) void {
 pub fn focusedColumnName(self: App) []const u8 {
     return switch (self.current_column) {
         0 => self.status_bar.cell.title,
-        1 => self.directory_tree.name,
-        2 => self.notes_list.name,
+        1 => self.directory_tree.list.name,
+        2 => self.notes_list.list.name,
         3 => self.editor.name,
         else => "",
     };
@@ -354,7 +354,6 @@ pub fn deinit(self: *App) void {
     self.alloc.destroy(self.directory_tree);
 
     self.notes_list.deinit();
-    self.alloc.destroy(self.notes_list.cell);
     self.alloc.destroy(self.notes_list);
 
     self.editor.deinit();

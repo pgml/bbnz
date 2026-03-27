@@ -661,8 +661,8 @@ fn resetLeader(self: *Input) void {
 fn lineDown(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cmdLineDown(),
-        2 => self.app.notes_list.cmdLineDown(),
+        1 => self.app.directory_tree.list.lineDown(),
+        2 => self.app.notes_list.list.lineDown(),
         else => {},
     }
 }
@@ -670,8 +670,8 @@ fn lineDown(self: *Input, flags: ?Flags) void {
 fn lineUp(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cmdLineUp(),
-        2 => self.app.notes_list.cmdLineUp(),
+        1 => self.app.directory_tree.list.lineUp(),
+        2 => self.app.notes_list.list.lineUp(),
         else => {},
     }
 }
@@ -713,8 +713,8 @@ fn cancelAction(self: *Input, flags: ?Flags) void {
 fn goToTop(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cmdGoToTop(),
-        2 => self.app.notes_list.cmdGoToTop(),
+        1 => self.app.directory_tree.list.goToTop(),
+        2 => self.app.notes_list.list.goToTop(),
         else => {},
     }
 }
@@ -722,8 +722,8 @@ fn goToTop(self: *Input, flags: ?Flags) void {
 fn goToBottom(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cmdGoToBottom(),
-        2 => self.app.notes_list.cmdGoToBottom(),
+        1 => self.app.directory_tree.list.goToBottom(),
+        2 => self.app.notes_list.list.goToBottom(),
         else => {},
     }
 }

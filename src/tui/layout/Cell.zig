@@ -141,18 +141,35 @@ pub inline fn writeStr(
     }
 }
 
+pub const HeaderArgs = struct {
+    /// Whether the widget headline is attached to is focused.
+    is_focused: bool = false,
+
+    /// Whether to colour the title the same colour as the border.
+    color_title: bool = false,
+
+    /// Whether the title should be bold.
+    bold: bool = false,
+};
+
 pub fn drawHeader(
     win: vx.Window,
     title: []const u8,
     col: u16,
     row: u16,
-    is_focused: bool,
+    args: HeaderArgs,
 ) void {
     var c = col;
 
     var style: vx.Style = .{ .fg = theme.Color.CellHeader.fg };
-    if (is_focused) {
-        style = .{ .fg = theme.Color.CellHeader.fg_focused };
+    if (args.is_focused) {
+        style.fg = theme.Color.CellHeader.fg_focused;
+    }
+    if (args.bold) {
+        style.bold = true;
+    }
+    if (args.color_title) {
+        style.fg = theme.Color.Border.fg_focused;
     }
 
     Cell.writeStr(win, null, &c, row, " ", .{});

@@ -117,7 +117,9 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
 pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
     const col: u16 = @intCast(self.list.getOffsetX() + 1);
-    Cell.drawHeader(win, self.list.getTitle(), col, 0, self.list.isFocused());
+    Cell.drawHeader(win, self.list.getTitle(), col, 0, .{
+        .is_focused = self.list.isFocused(),
+    });
 }
 
 fn writeLine(

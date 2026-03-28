@@ -204,7 +204,7 @@ pub fn draw(self: *App) !void {
     try self.initComponents();
 
     self.directory_tree.draw(win);
-    self.directory_tree.list.drawHeader(win, 1, 0);
+    self.directory_tree.list.drawHeader(win, 1, 0, .{});
 
     self.notes_list.draw(win);
     self.notes_list.drawHeader(win);
@@ -222,6 +222,10 @@ pub fn draw(self: *App) !void {
             win,
             self.buffer_list.default_x_off + 1,
             self.buffer_list.default_y_off,
+            .{
+                .bold = true,
+                .color_title = true,
+            },
         );
     }
 }

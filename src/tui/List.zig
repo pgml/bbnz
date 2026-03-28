@@ -234,8 +234,16 @@ pub fn draw(self: *List, win: vx.Window) void {
     self.win = win;
 }
 
-pub inline fn drawHeader(self: List, win: vx.Window, col: u16, row: u16) void {
-    Cell.drawHeader(win, self.getTitle(), col, row, self.isFocused());
+pub inline fn drawHeader(
+    self: List,
+    win: vx.Window,
+    col: u16,
+    row: u16,
+    args: Cell.HeaderArgs,
+) void {
+    var a = args;
+    a.is_focused = self.isFocused();
+    Cell.drawHeader(win, self.getTitle(), col, row, a);
 }
 
 /// Returns the first visible row of the list.

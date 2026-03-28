@@ -234,6 +234,10 @@ pub fn draw(self: *List, win: vx.Window) void {
     self.win = win;
 }
 
+pub inline fn drawHeader(self: List, win: vx.Window, col: u16, row: u16) void {
+    Cell.drawHeader(win, self.getTitle(), col, row, self.isFocused());
+}
+
 /// Returns the first visible row of the list.
 pub inline fn getTopVisRow(self: List) usize {
     return self.scroll_view.view.scroll.y;
@@ -255,6 +259,16 @@ pub inline fn getItem(self: List, index: usize) ?*anyopaque {
     }
 
     return self.items.items[index];
+}
+
+pub fn contains(self: List, path: []const u8) bool {
+    for (self.items.items) |item| {
+        const list_item: *Item = @ptrCast(@alignCast(item));
+        if (std.mem.eql(u8, list_item.path, path)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// Shows or hides the vertical scrollbar of the given `scroll_view` depending
@@ -292,7 +306,7 @@ pub fn lineDown(self: *List) void {
         return;
     }
     self.selected_index += 1;
-    self.clampIndex();
+    self.clampIndex(null);
 }
 
 /// Moves the selection one line up.
@@ -301,7 +315,7 @@ pub fn lineUp(self: *List) void {
         return;
     }
     self.selected_index -= 1;
-    self.clampIndex();
+    self.clampIndex(null);
 }
 
 /// Returns the length of the item array list
@@ -317,12 +331,9 @@ pub fn numItems(self: List) usize {
         self.len();
 }
 
-pub fn clampIndex(self: *List) void {
-    self.selected_index = std.math.clamp(
-        self.selected_index,
-        0,
-        self.numItems(),
-    );
+pub fn clampIndex(self: *List, max: ?usize) void {
+    const max_items = max orelse self.numItems();
+    self.selected_index = std.math.clamp(self.selected_index, 0, max_items);
 }
 
 pub fn focus(self: *List) void {

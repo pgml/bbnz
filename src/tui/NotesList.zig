@@ -117,10 +117,16 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
 pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
     const col: u16 = @intCast(self.list.getOffsetX() + 1);
-    Cell.drawHeader(win, self.list.getTitle(), col, self.list.isFocused());
+    Cell.drawHeader(win, self.list.getTitle(), col, 0, self.list.isFocused());
 }
 
-fn writeLine(self: NotesList, item: *NoteItem, row: u16, width: u16, style: vx.Cell.Style) void {
+fn writeLine(
+    self: NotesList,
+    item: *NoteItem,
+    row: u16,
+    width: u16,
+    style: vx.Cell.Style,
+) void {
     var col: u16 = 0;
     var w: usize = 0;
 
@@ -363,7 +369,7 @@ pub fn cmdSelectNote(self: *NotesList) void {
 }
 
 /// Updates the `last_open_note` entry in the metainfos file.
-fn updateLastNote(self: *NotesList) void {
+pub fn updateLastNote(self: *NotesList) void {
     const note = self.selectedNote() orelse return;
     self.app.config.meta_infos.setValue(
         .last_open_note,

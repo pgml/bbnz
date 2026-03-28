@@ -141,7 +141,13 @@ pub inline fn writeStr(
     }
 }
 
-pub fn drawHeader(win: vx.Window, title: []const u8, col: u16, is_focused: bool) void {
+pub fn drawHeader(
+    win: vx.Window,
+    title: []const u8,
+    col: u16,
+    row: u16,
+    is_focused: bool,
+) void {
     var c = col;
 
     var style: vx.Style = .{ .fg = theme.Color.CellHeader.fg };
@@ -149,7 +155,7 @@ pub fn drawHeader(win: vx.Window, title: []const u8, col: u16, is_focused: bool)
         style = .{ .fg = theme.Color.CellHeader.fg_focused };
     }
 
-    Cell.writeStr(win, null, &c, 0, " ", .{});
-    Cell.writeStr(win, null, &c, 0, title, style);
-    Cell.writeStr(win, null, &c, 0, " ", .{});
+    Cell.writeStr(win, null, &c, row, " ", .{});
+    Cell.writeStr(win, null, &c, row, title, style);
+    Cell.writeStr(win, null, &c, row, " ", .{});
 }

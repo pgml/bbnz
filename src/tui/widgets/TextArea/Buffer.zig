@@ -371,8 +371,8 @@ pub fn setIndex(self: *Buffer, index: usize) void {
     self.index = index;
 }
 
-pub fn setPath(self: *Buffer, path: []const u8) void {
-    self.path = path;
+pub fn setPath(self: *Buffer, path: []const u8) !void {
+    self.path = try self.alloc.dupe(u8, path);
 }
 
 pub fn setContentFromStr(self: *Buffer, content: []const u8) !void {
@@ -587,6 +587,7 @@ pub fn deinit(self: *Buffer) void {
 
     self.alloc.free(self.file_content);
     self.alloc.free(self.current_patch);
+    self.alloc.free(self.path);
 
     self.history.deinit();
     self.alloc.destroy(self.history);

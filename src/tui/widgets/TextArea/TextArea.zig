@@ -17,7 +17,7 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
-/// List of available text buffers
+/// List of open text buffers
 buffers: std.ArrayList(*Buffer),
 
 /// Current buffer
@@ -268,7 +268,7 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     var buf: *Buffer = self.buffers.getLast();
     // use the arena from the buffer since the history is tied to it.
     buf.history = try .init(buf.alloc);
-    buf.setPath(path);
+    try buf.setPath(path);
     buf.setIndex(self.numBufs() - 1);
 
     try buf.setContentFromFile(path);

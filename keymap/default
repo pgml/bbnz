@@ -11,7 +11,7 @@ mode normal {
     bind "C-w C-l"    fn: focusNextColumn
     bind "C-w h"      fn: focusPrevColumn
     bind "C-w C-h"    fn: focusPrevColumn
-    bind "space e"    fn: showBufferList
+    bind "space e"    fn: bufferlist.toggle
     bind "space q"    fn: closeNote              #todo
     bind "space u"    fn: reopenLastClosedNote   #todo
     bind "space n"    fn: newScratch             #todo
@@ -65,8 +65,11 @@ mode insert(Folders, Notes) {
 # Buffer list commands
 # —————————————————————————————————————————————————————————————————————————————
 mode normal(BufferList) {
-    bind "esc"    fn: closeBufferList #todo
+    bind "esc"    fn: bufferlist.toggle
     bind "D"      fn: closeNote       #todo
+    bind "j"      fn: bufferlist.lineDown
+    bind "k"      fn: bufferlist.lineUp
+    bind "enter"  fn: bufferlist.select
 }
 
 # —————————————————————————————————————————————————————————————————————————————
@@ -76,7 +79,6 @@ mode normal(Folders) {
     bind "l"    fn: dirtree.treeExpand
     bind "h"    fn: dirtree.treeCollapse
     bind "d"    fn: listitem.create
-}
 }
 
 # —————————————————————————————————————————————————————————————————————————————

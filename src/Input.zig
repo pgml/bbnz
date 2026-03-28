@@ -7,6 +7,7 @@ const vx = @import("vaxis");
 
 const App = @import("App.zig");
 const tui = @import("tui/tui.zig");
+const BufferList = tui.BufferList;
 const DirectoryTree = tui.DirectoryTree;
 const Editor = tui.Editor;
 const List = tui.List;
@@ -54,6 +55,7 @@ pub const FlagValue = enum {
 pub const Flags = std.ArrayList(FlagValue);
 
 const AppFn = *const fn (*App) void;
+const BufferFn = *const fn (*BufferList) void;
 const InputFn = *const fn (*Input, ?Flags) void;
 const VimFn = *const fn (*Vim, ?Flags) void;
 const DirTreeFn = *const fn (*DirectoryTree) void;
@@ -64,6 +66,7 @@ const TextAreaFn = *const fn (*TextArea) void;
 const FnTarget = union(enum) {
     input: InputFn,
     app: AppFn,
+    buffers: BufferFn,
     tree: DirTreeFn,
     notes: NotesFn,
     editor: EditorFn,
@@ -90,16 +93,21 @@ const fn_registry = [_]FnMap{
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
     .{ .name = "closeNote",         .exec = .{ .input = closeNote }},
 
-    .{ .name = "listitem.create",      .exec = .{ .input = listCreate } },
-    .{ .name = "listitem.rename",      .exec = .{ .input = listRename } },
-    .{ .name = "listitem.cursorLeft",  .exec = .{ .input = listCursorLeft } },
+    .{ .name = "listitem.create",      .exec = .{ .input = listCreate }},
+    .{ .name = "listitem.rename",      .exec = .{ .input = listRename }},
+    .{ .name = "listitem.cursorLeft",  .exec = .{ .input = listCursorLeft }},
     .{ .name = "listitem.cursorRight", .exec = .{ .input = listCursorRight }} ,
-    .{ .name = "listitem.delChar",     .exec = .{ .input = listDeleteChar } },
-    .{ .name = "listitem.cancelEdit",  .exec = .{ .input = listCancelEdit } },
-    .{ .name = "listitem.confirmEdit", .exec = .{ .input = listConfirmEdit } },
+    .{ .name = "listitem.delChar",     .exec = .{ .input = listDeleteChar }},
+    .{ .name = "listitem.cancelEdit",  .exec = .{ .input = listCancelEdit }},
+    .{ .name = "listitem.confirmEdit", .exec = .{ .input = listConfirmEdit }},
 
     .{ .name = "dirtree.treeExpand",   .exec = .{ .tree = DirectoryTree.cmdExpand }},
     .{ .name = "dirtree.treeCollapse", .exec = .{ .tree = DirectoryTree.cmdCollapse }},
+
+    .{ .name = "bufferlist.toggle",    .exec = .{ .buffers = BufferList.cmdToggle }},
+    .{ .name = "bufferlist.lineDown",  .exec = .{ .buffers = BufferList.cmdLineDown }},
+    .{ .name = "bufferlist.lineUp",    .exec = .{ .buffers = BufferList.cmdLineUp }},
+    .{ .name = "bufferlist.select",    .exec = .{ .buffers = BufferList.cmdSelect }},
 
     .{ .name = "statusbar.deleteBefore",  .exec = .{ .input = statusBarDeleteBefore }},
 
@@ -586,6 +594,7 @@ pub fn handleSeq(self: *Input, vx_key: vx.Key) !void {
             switch (func.exec) {
                 .input => |f| f(self, reg_fn.flags),
                 .app => |f| f(self.app),
+                .buffers => |f| f(self.app.buffer_list),
                 .tree => |f| f(self.app.directory_tree),
                 .notes => |f| f(self.app.notes_list),
                 .editor => |f| f(self.app.editor),
@@ -661,8 +670,8 @@ fn resetLeader(self: *Input) void {
 fn lineDown(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.list.lineDown(),
-        2 => self.app.notes_list.list.lineDown(),
+        .directory_tree => self.app.directory_tree.list.lineDown(),
+        .notes_list => self.app.notes_list.list.lineDown(),
         else => {},
     }
 }
@@ -670,8 +679,8 @@ fn lineDown(self: *Input, flags: ?Flags) void {
 fn lineUp(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.list.lineUp(),
-        2 => self.app.notes_list.list.lineUp(),
+        .directory_tree => self.app.directory_tree.list.lineUp(),
+        .notes_list => self.app.notes_list.list.lineUp(),
         else => {},
     }
 }
@@ -688,14 +697,17 @@ fn treeCollapse(self: *Input, flags: ?Flags) void {
 
 fn cmd(self: *Input, flags: ?Flags) void {
     _ = flags;
+    if (self.app.buffer_list.list.isFocused()) {
+        return;
+    }
     self.app.setMode(.command);
 }
 
 fn confirmAction(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cmdSelectDir(),
-        2 => self.app.notes_list.cmdSelectNote(),
+        .directory_tree => self.app.directory_tree.cmdSelectDir(),
+        .notes_list => self.app.notes_list.cmdSelectNote(),
         else => {},
     }
 }
@@ -713,8 +725,8 @@ fn cancelAction(self: *Input, flags: ?Flags) void {
 fn goToTop(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.list.goToTop(),
-        2 => self.app.notes_list.list.goToTop(),
+        .directory_tree => self.app.directory_tree.list.goToTop(),
+        .notes_list => self.app.notes_list.list.goToTop(),
         else => {},
     }
 }
@@ -722,8 +734,8 @@ fn goToTop(self: *Input, flags: ?Flags) void {
 fn goToBottom(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.list.goToBottom(),
-        2 => self.app.notes_list.list.goToBottom(),
+        .directory_tree => self.app.directory_tree.list.goToBottom(),
+        .notes_list => self.app.notes_list.list.goToBottom(),
         else => {},
     }
 }
@@ -832,8 +844,8 @@ fn yank(self: *Input, flags: ?Flags) void {
 pub fn listCreate(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.createListItem() catch return,
-        2 => self.app.notes_list.createListItem() catch return,
+        .directory_tree => self.app.directory_tree.createListItem() catch return,
+        .notes_list => self.app.notes_list.createListItem() catch return,
         else => {},
     }
 }
@@ -841,8 +853,8 @@ pub fn listCreate(self: *Input, flags: ?Flags) void {
 pub fn listRename(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.initEditListItem() catch return,
-        2 => self.app.notes_list.initEditListItem() catch return,
+        .directory_tree => self.app.directory_tree.initEditListItem() catch return,
+        .notes_list => self.app.notes_list.initEditListItem() catch return,
         else => {},
     }
 }
@@ -854,12 +866,12 @@ fn getListItem(self: *Input) ?struct {
     var item: *List.Item = undefined;
     var alloc: std.mem.Allocator = undefined;
     switch (self.app.current_column) {
-        1 => {
+        .directory_tree => {
             const tree = self.app.directory_tree;
             if (tree.selectedDir()) |dir| item = &dir.data;
             alloc = tree.alloc;
         },
-        2 => {
+        .notes_list => {
             const list = self.app.notes_list;
             if (list.selectedNote()) |note| item = &note.data;
             alloc = list.alloc;
@@ -895,8 +907,8 @@ pub fn listConfirmEdit(self: *Input, flags: ?Flags) void {
     _ = flags;
 
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.confirmEdit() catch return,
-        2 => self.app.notes_list.confirmEdit() catch return,
+        .directory_tree => self.app.directory_tree.confirmEdit() catch return,
+        .notes_list => self.app.notes_list.confirmEdit() catch return,
         else => {},
     }
 }
@@ -904,8 +916,8 @@ pub fn listConfirmEdit(self: *Input, flags: ?Flags) void {
 pub fn listCancelEdit(self: *Input, flags: ?Flags) void {
     _ = flags;
     switch (self.app.current_column) {
-        1 => self.app.directory_tree.cancelEdit() catch return,
-        2 => self.app.notes_list.cancelEdit() catch return,
+        .directory_tree => self.app.directory_tree.cancelEdit() catch return,
+        .notes_list => self.app.notes_list.cancelEdit() catch return,
         else => {},
     }
 }

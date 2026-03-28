@@ -126,7 +126,7 @@ pub fn update(self: *DirectoryTree, event: App.Event) !void {
         else => {},
     }
 
-    self.list.clampIndex();
+    self.list.clampIndex(null);
     self.list.is_insert = self.app.mode == .insert and self.list.isFocused();
 }
 
@@ -172,10 +172,6 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
         }
     }
     //}
-}
-
-pub inline fn drawHeader(self: DirectoryTree, win: vx.Window, col: u16) void {
-    Cell.drawHeader(win, self.list.getTitle(), col, self.list.isFocused());
 }
 
 fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: vx.Cell.Style) void {

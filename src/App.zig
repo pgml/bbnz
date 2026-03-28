@@ -8,6 +8,7 @@ pub const Input = @import("Input.zig");
 const log = @import("log.zig");
 
 const tui = @import("tui/tui.zig");
+const BufferList = tui.BufferList;
 const DirectoryTree = tui.DirectoryTree;
 const Editor = tui.Editor;
 const NotesList = tui.NotesList;
@@ -29,13 +30,15 @@ notes_list: *NotesList,
 
 directory_tree: *DirectoryTree,
 
+buffer_list: *BufferList,
+
 editor: *Editor,
 
 status_bar: *StatusBar,
 
-current_column: u16 = 1,
+current_column: Column = .directory_tree,
 
-last_column: u16 = 0,
+last_column: Column = .directory_tree,
 
 mode: Editor.TextArea.Vim.Mode = .normal,
 
@@ -54,6 +57,14 @@ custom_events: std.ArrayList(Event) = .empty,
 
 /// Whether the main loop should be rerendered.
 redraw_ui: bool = false,
+
+pub const Column = enum {
+    status_bar,
+    directory_tree,
+    notes_list,
+    editor,
+    buffer_list,
+};
 
 pub const Event = union(enum) {
     key_press: vaxis.Key,
@@ -84,6 +95,7 @@ pub fn init(alloc: std.mem.Allocator, args_map: std.StringHashMap(?[]const u8)) 
         .tty = try vaxis.Tty.init(&buffer),
         .vx = try vaxis.init(alloc, .{}),
         .should_quit = false,
+        .buffer_list = undefined,
         .notes_list = undefined,
         .directory_tree = undefined,
         .editor = undefined,
@@ -110,6 +122,7 @@ pub fn run(self: *App) !void {
         try self.vx.enterAltScreen(writer);
     }
 
+    self.buffer_list = try .init(self.alloc, "BufferList", self);
     self.directory_tree = try .init(self.alloc, "Folders", self);
     self.notes_list = try .init(self.alloc, "Notes", self);
     self.editor = try .init(self.alloc, "Editor", self);
@@ -166,6 +179,7 @@ pub fn run(self: *App) !void {
 }
 
 pub fn update(self: *App, event: Event) !void {
+    try self.buffer_list.update(event);
     try self.directory_tree.update(event);
     try self.notes_list.update(event);
     try self.editor.update(event);
@@ -188,8 +202,9 @@ pub fn draw(self: *App) !void {
     self.win = win;
 
     try self.initComponents();
+
     self.directory_tree.draw(win);
-    self.directory_tree.drawHeader(win, 1);
+    self.directory_tree.list.drawHeader(win, 1, 0);
 
     self.notes_list.draw(win);
     self.notes_list.drawHeader(win);
@@ -198,6 +213,17 @@ pub fn draw(self: *App) !void {
     try self.editor.drawHeader(win);
 
     try self.status_bar.draw(win);
+
+    if (self.buffer_list.list.isFocused()) {
+        // This has to be called after everything else to make the list appear
+        // on top of the other components.
+        try self.buffer_list.draw(win);
+        self.buffer_list.list.drawHeader(
+            win,
+            self.buffer_list.default_x_off + 1,
+            self.buffer_list.default_y_off,
+        );
+    }
 }
 
 /// Collects and runs all deferred events at a specific time.
@@ -233,7 +259,8 @@ fn restoreState(self: *App) !void {
     try self.directory_tree.restore();
     try self.notes_list.restore();
     try self.editor.restore();
-    self.focusColumn(@intCast(self.config.meta_infos.current_column));
+    //self.focusColumn(@intCast(self.config.meta_infos.current_column));
+    self.focusColumn(@enumFromInt(self.config.meta_infos.current_column));
 }
 
 /// prepares all components for rendering, sets dimensions and offsets...
@@ -241,63 +268,68 @@ inline fn initComponents(self: *App) !void {
     const win = self.win orelse return;
     const sb_height = self.status_bar.cell.height;
 
+    self.buffer_list.list.setOffsetX(self.buffer_list.default_x_off);
+    self.buffer_list.list.setOffsetY(self.buffer_list.default_y_off);
+
     self.directory_tree.list.setHeight(win.height - sb_height);
     self.directory_tree.list.setOffsetY(0);
 
     self.notes_list.list.setHeight(win.height - sb_height);
-    self.notes_list.list.setOffsetY(0);
     self.notes_list.list.setOffsetX(self.directory_tree.list.getWidth());
+    self.notes_list.list.setOffsetY(0);
 
     const xoff = self.notes_list.list.getWidth() + self.directory_tree.list.getWidth();
     self.editor.cell.setHeight(win.height - sb_height);
-    self.editor.cell.setOffsetY(0);
     self.editor.cell.setOffsetX(xoff);
+    self.editor.cell.setOffsetY(0);
 
     self.status_bar.cell.setOffsetY(self.editor.cell.height);
 }
 
-pub fn focusColumn(self: *App, index: u16) void {
-    self.directory_tree.list.setFocus(index == 1);
-    self.notes_list.list.setFocus(index == 2);
-    self.editor.setFocus(index == 3);
-    self.current_column = index;
+pub fn focusColumn(self: *App, col: Column) void {
+    self.last_column = self.current_column;
+    self.directory_tree.list.setFocus(col == .directory_tree);
+    self.notes_list.list.setFocus(col == .notes_list);
+    self.editor.setFocus(col == .editor);
+    self.buffer_list.list.setFocus(col == .buffer_list);
+    self.current_column = col;
 }
 
 /// Selects and highlights the respectivley next of the
 /// currently selected column.
 pub fn focusNextColumn(self: *App, cycle: bool) void {
     const num_cols = 3;
-    var current_column = self.current_column;
+    var current_col_index = @intFromEnum(self.current_column);
 
-    if (cycle and current_column == num_cols) {
-        current_column = 0;
+    if (cycle and current_col_index == num_cols) {
+        current_col_index = 0;
     }
 
-    const index = @min(current_column + 1, num_cols);
-    return self.focusColumn(index);
+    const index = @min(current_col_index + 1, num_cols);
+    return self.focusColumn(@enumFromInt(index));
 }
 
 /// Selects and highlights the respectivley previous of the
 /// currently selected column.
 pub fn focusPrevColumn(self: *App, cycle: bool) void {
     const first_col = 1;
-    var current_column = self.current_column;
+    var cur_col = @intFromEnum(self.current_column);
 
-    if (cycle and current_column == 1) {
-        current_column = 4;
+    if (cycle and cur_col == 1) {
+        cur_col = 4;
     }
 
-    const column = @max(current_column - 1, first_col);
-    return self.focusColumn(column);
+    const column = @max(cur_col - 1, first_col);
+    return self.focusColumn(@enumFromInt(column));
 }
 
 pub fn focusedColumnName(self: App) []const u8 {
     return switch (self.current_column) {
-        0 => self.status_bar.cell.title,
-        1 => self.directory_tree.list.name,
-        2 => self.notes_list.list.name,
-        3 => self.editor.name,
-        else => "",
+        .status_bar => self.status_bar.cell.title,
+        .directory_tree => self.directory_tree.list.name,
+        .notes_list => self.notes_list.list.name,
+        .editor => self.editor.name,
+        .buffer_list => self.buffer_list.list.name,
     };
 }
 
@@ -312,7 +344,7 @@ pub fn cmdPrevCol(self: *App) void {
 }
 
 fn saveColToConf(self: *App) !void {
-    self.config.meta_infos.current_column = self.current_column;
+    self.config.meta_infos.current_column = @intFromEnum(self.current_column);
     try self.config.meta_infos.setValue(
         .current_column,
         self.current_column,
@@ -326,7 +358,7 @@ pub fn setMode(self: *App, mode: Editor.TextArea.Vim.Mode) void {
     if (mode == .command) {
         self.last_column = self.current_column;
         // unfocus all colums by setting index to 0
-        self.focusColumn(0);
+        self.focusColumn(.status_bar);
         self.status_bar.focus();
     }
 }
@@ -349,6 +381,9 @@ pub fn deinit(self: *App) void {
 
     self.input.deinit();
     self.alloc.destroy(self.input);
+
+    self.buffer_list.deinit();
+    self.alloc.destroy(self.buffer_list);
 
     self.directory_tree.deinit();
     self.alloc.destroy(self.directory_tree);

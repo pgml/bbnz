@@ -1,3 +1,4 @@
+pub const BufferList = @import("BufferList.zig");
 pub const DirectoryTree = @import("DirectoryTree.zig");
 pub const Editor = @import("Editor.zig");
 pub const List = @import("List.zig");

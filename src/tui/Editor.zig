@@ -121,27 +121,42 @@ pub fn restore(self: *Editor) !void {
     if (utils.strEql(meta.last_open_note, "")) {
         return;
     }
-    const last_open_note = meta.last_open_note;
 
-    try self.openBuf(last_open_note);
-
-    if (meta.files_info.get(last_open_note)) |file_info| {
-        const curpos = file_info.cursor_pos;
-        self.textarea.moveCursorTo(@intCast(curpos.row), @intCast(curpos.col));
+    // open all notes of the last session
+    for (meta.last_notes.items) |note| {
+        try self.openBuf(note, false);
+        if (meta.files_info.get(note)) |file_info| {
+            const curpos = file_info.cursor_pos;
+            self.textarea.moveCursorTo(@intCast(curpos.row), @intCast(curpos.col));
+        }
     }
+
+    // switch to the note that was opened in the editor.
+    try self.openBuf(meta.last_open_note, false);
 }
 
-pub fn openBuf(self: *Editor, path: []const u8) !void {
+/// Opens a buffer with the given `path`.
+/// if `save_to_conf` is true it saves this specific note to the
+/// meta info config file.
+pub fn openBuf(self: *Editor, path: []const u8, save_to_conf: bool) !void {
     try self.textarea.openBuf(path);
 
     if (self.textarea.scroll_view) |view| {
         view.setRow(self.textarea.curBuf().row);
         view.reposition();
     }
+
     // get breadcrumb
     var bc_buf: [256]u8 = undefined;
     self.alloc.free(self.cell.title);
     self.cell.title = try self.alloc.dupe(u8, try self.buildBreadCrumb(&bc_buf));
+
+    const note_path = self.textarea.curBuf().path;
+    if (save_to_conf) {
+        try self.app.config.meta_infos.setValue(.last_open_note, note_path);
+    }
+    try self.app.config.meta_infos.setValue(.last_notes, note_path);
+    try self.app.config.meta_infos.write();
 }
 
 // Remove the root notes directory from the absolute buffer path.

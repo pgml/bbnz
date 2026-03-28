@@ -256,8 +256,7 @@ pub fn selectedNote(self: BufferList) ?*BufferListItem {
 
 pub fn cmdSelect(self: *BufferList) void {
     if (self.selectedNote()) |note| {
-        self.app.editor.openBuf(note.data.path) catch return;
-        self.app.notes_list.updateLastNote();
+        self.app.editor.openBuf(note.data.path, true) catch return;
     }
     self.list.setFocus(false);
     self.app.focusColumn(self.app.last_column);

@@ -38,7 +38,7 @@ pub const MetaInfos = struct {
     file_path: []const u8 = "",
 
     /// A list of all open notes
-    last_notes: std.ArrayList(u8) = .empty,
+    last_notes: std.ArrayList([]u8) = .empty,
 
     /// The last open note
     last_open_note: []const u8 = "",
@@ -135,6 +135,14 @@ pub const MetaInfos = struct {
                 self.last_open_note = try self.alloc.dupe(u8, val.string);
             }
 
+            if (utils.strEql(key, Opts.last_notes.str())) {
+                var split_iter = std.mem.splitAny(u8, val.string, ",");
+                while (split_iter.next()) |note| {
+                    const path = try self.alloc.dupe(u8, note);
+                    try self.last_notes.append(self.alloc, path);
+                }
+            }
+
             if (utils.strEql(key, Opts.current_column.str())) {
                 self.current_column = @intCast(val.integer);
             }
@@ -185,12 +193,23 @@ pub const MetaInfos = struct {
             },
             .pointer => |ptr| {
                 if (ptr.child == u8) {
-                    if (opt == .last_directory) {
-                        self.alloc.free(self.last_directory);
-                        self.last_directory = try self.alloc.dupe(u8, val);
-                    } else if (opt == .last_open_note) {
-                        self.alloc.free(self.last_open_note);
-                        self.last_open_note = try self.alloc.dupe(u8, val);
+                    switch (opt) {
+                        .last_directory => {
+                            self.alloc.free(self.last_directory);
+                            self.last_directory = try self.alloc.dupe(u8, val);
+                        },
+                        .last_open_note => {
+                            self.alloc.free(self.last_open_note);
+                            self.last_open_note = try self.alloc.dupe(u8, val);
+                        },
+                        .last_notes => {
+                            if (self.lastNotesContain(val)) return;
+                            try self.last_notes.append(
+                                self.alloc,
+                                try self.alloc.dupe(u8, val),
+                            );
+                        },
+                        else => {},
                     }
                 }
             },
@@ -258,6 +277,10 @@ pub const MetaInfos = struct {
         try write_stream.beginKeyPair(Options.last_open_note.str());
         try write_stream.writeString(self.last_open_note);
 
+        try write_stream.beginKeyPair(Options.last_notes.str());
+        const last_notes = try std.mem.join(self.alloc, ",", self.last_notes.items);
+        try write_stream.writeString(last_notes);
+
         try write_stream.beginKeyPair(Options.current_column.str());
         try write_stream.writeInteger(self.current_column);
 
@@ -291,6 +314,17 @@ pub const MetaInfos = struct {
 
         try write_stream.writer.writeByte('\n');
         try write_stream.writer.flush();
+
+        self.alloc.free(last_notes);
+    }
+
+    fn lastNotesContain(self: *MetaInfos, path: []const u8) bool {
+        for (self.last_notes.items) |note_path| {
+            if (std.mem.eql(u8, note_path, path)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     pub fn deinit(self: *MetaInfos) void {

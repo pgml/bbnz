@@ -368,10 +368,8 @@ pub fn selectedNote(self: NotesList) ?*NoteItem {
 }
 
 pub fn cmdSelectNote(self: *NotesList) void {
-    if (self.selectedNote()) |note| {
-        self.app.editor.openBuf(note.data.path) catch return;
-        self.updateLastNote();
-    }
+    const note = self.selectedNote() orelse return;
+    self.app.editor.openBuf(note.data.path, true) catch return;
 }
 
 /// Updates the `last_open_note` entry in the metainfos file.

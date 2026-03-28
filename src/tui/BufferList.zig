@@ -173,15 +173,16 @@ pub fn refresh(self: *BufferList) !void {
 
     // Fill remaining rows with empty items to prevent notes from showing.
     // Basically simulating a solid background
-    if (self.list.numItems() < self.default_height) {
-        // default height minus border
-        const num_max = self.default_height - 3;
-        for (self.list.numItems()..num_max) |_| {
+    const content_height = self.default_height - 3; // minus borders
+    if (self.list.numItems() < content_height) {
+        for (self.list.numItems()..content_height) |_| {
             const item = try self.makeListItem("", "");
             item.is_placeholder = true;
             try self.list.items.append(self.alloc, item);
         }
     }
+
+    self.list.toggleVbar(self.default_height, self.list.numItems());
 }
 
 fn allocNoteItem(self: *BufferList, item: BufferListItem) !*BufferListItem {

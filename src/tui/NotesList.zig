@@ -96,7 +96,7 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
         _ = child_win.child(child_opts);
 
-        var style: vx.Cell.Style = .{};
+        var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
         if (term_row == self.list.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
@@ -129,25 +129,29 @@ fn writeLine(
 ) void {
     var col: u16 = 0;
     var w: usize = 0;
-
     var view = self.list.scroll_view.view;
 
     if (self.list.win) |win| {
         Cell.writeStr(win, &view, &col, row, " ", style);
 
-        var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
+        var icon_style: vx.Style = .{
+            .fg = theme.Color.List.note_fg,
+            .dim = style.dim,
+        };
         if (self.selectedNote()) |selected_note| {
             if (selected_note == item) {
                 icon_style.fg = theme.Color.default_fg;
                 icon_style.bg = theme.Color.List.selection_bg;
             }
         }
+
         var note_icon = Icon.getNerd(.note);
         if (self.selectedNote()) |note| {
             if (self.list.is_insert and note == item) {
                 note_icon = Icon.getNerd(.pen);
             }
         }
+
         Cell.writeStr(win, &view, &col, row, note_icon, icon_style);
         Cell.writeStr(win, &view, &col, row, " ", style);
 

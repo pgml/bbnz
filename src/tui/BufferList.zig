@@ -122,7 +122,6 @@ fn writeLine(
 ) !void {
     var col: u16 = 0;
     var w: usize = 0;
-
     var view = self.list.scroll_view.view;
 
     if (self.list.win) |win| {
@@ -144,7 +143,7 @@ fn writeLine(
             }
 
             Cell.writeStr(win, &view, &col, row, item.str_index, style);
-            Cell.writeStr(win, &view, &col, row, " ", style);
+            Cell.writeStr(win, &view, &col, row, "  ", style);
             Cell.writeStr(win, &view, &col, row, note_icon, icon_style);
             Cell.writeStr(win, &view, &col, row, " ", style);
         }

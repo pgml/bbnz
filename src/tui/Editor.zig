@@ -94,6 +94,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .num_lines = buf.numRows() +| 1,
             .style = .{
                 .fg = theme.Color.Editor.line_number_fg,
+                .dim = self.app.isOverlayOpen(),
             },
         };
 

@@ -363,6 +363,10 @@ pub fn setMode(self: *App, mode: Editor.TextArea.Vim.Mode) void {
     }
 }
 
+pub fn isOverlayOpen(self: *App) bool {
+    return self.buffer_list.list.isFocused();
+}
+
 pub fn cancelAction(self: *App) void {
     if (self.mode == .command) {
         self.focusColumn(self.last_column);

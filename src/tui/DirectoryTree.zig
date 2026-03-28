@@ -150,7 +150,7 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
 
         _ = child_win.child(child_opts);
 
-        var style: vx.Cell.Style = .{};
+        var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
         if (term_row == self.list.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
@@ -177,9 +177,21 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) void {
 fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: vx.Cell.Style) void {
     var col: u16 = 0;
     var w: usize = 0;
-
     const selected_dir = self.selectedDir();
     var view = self.list.scroll_view.view;
+
+    var arrow_style: vx.Style = .{ .fg = theme.Color.List.toggle_fg, .dim = style.dim };
+    if (selected_dir == item) {
+        arrow_style.fg = theme.Color.default_fg;
+        arrow_style.bg = theme.Color.List.selection_bg;
+    }
+
+    // folder icon
+    var icon_style: vx.Style = .{ .fg = theme.Color.List.dir_fg, .dim = style.dim };
+    if (selected_dir == item) {
+        icon_style.fg = theme.Color.default_fg;
+        icon_style.bg = theme.Color.List.selection_bg;
+    }
 
     if (self.list.win) |win| {
         // indentation
@@ -198,21 +210,8 @@ fn writeLine(self: DirectoryTree, item: *TreeItem, row: u16, width: u16, style: 
             }
         }
 
-        var arrow_style: vx.Style = .{ .fg = theme.Color.List.toggle_fg };
-        if (selected_dir == item) {
-            arrow_style.fg = theme.Color.default_fg;
-            arrow_style.bg = theme.Color.List.selection_bg;
-        }
-
         Cell.writeStr(win, &view, &col, row, has_children, arrow_style);
         Cell.writeStr(win, &view, &col, row, " ", style);
-
-        // folder icon
-        var icon_style: vx.Style = .{ .fg = theme.Color.List.dir_fg };
-        if (selected_dir == item) {
-            icon_style.fg = theme.Color.default_fg;
-            icon_style.bg = theme.Color.List.selection_bg;
-        }
 
         var dir_icon = Icon.getNerd(.dir_closed);
         if (item.is_expanded and item.num_dirs > 0) {

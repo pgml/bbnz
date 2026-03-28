@@ -164,7 +164,7 @@ pub fn update(self: *TextArea, event: Event) !void {
 }
 
 pub fn draw(self: *TextArea) !void {
-    var style: vx.Cell.Style = .{};
+    var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
 
     if (self.win == null or
         self.scroll_view == null or
@@ -215,7 +215,7 @@ pub fn draw(self: *TextArea) !void {
                 .style = style,
             });
 
-            style = .{};
+            style = .{ .dim = self.app.isOverlayOpen() };
             col += 1;
         }
 

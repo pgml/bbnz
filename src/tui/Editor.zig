@@ -95,6 +95,12 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .cols = self.textarea.width,
             .rows = buf.numRows(),
         });
+
+        // dim scrollbar if an overlay is open
+        if (self.scroll_view.view.vertical_scrollbar) |*vbar| {
+            vbar.fg.dim = self.app.isAnyOverlayOpen();
+        }
+
         self.scroll_view.height = self.textarea.height;
         self.textarea.scroll_view = self.scroll_view;
 
@@ -102,7 +108,7 @@ pub fn draw(self: *Editor, win: vx.Window) void {
             .num_lines = buf.numRows() +| 1,
             .style = .{
                 .fg = theme.Color.Editor.line_number_fg,
-                .dim = self.app.isOverlayOpen(),
+                .dim = self.app.isAnyOverlayOpen(),
             },
         };
 

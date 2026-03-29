@@ -186,7 +186,7 @@ pub fn draw(self: *TextArea) !void {
         buf.updateCursorPos();
     }
 
-    var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
+    var style: vx.Cell.Style = .{ .dim = self.app.isAnyOverlayOpen() };
     var i: usize = 0;
 
     const start = view.scroll.y;
@@ -217,7 +217,7 @@ pub fn draw(self: *TextArea) !void {
                 .style = style,
             });
 
-            style = .{ .dim = self.app.isOverlayOpen() };
+            style = .{ .dim = self.app.isAnyOverlayOpen() };
             col += 1;
         }
 

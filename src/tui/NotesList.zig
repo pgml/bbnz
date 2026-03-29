@@ -48,7 +48,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*NotesList 
     self.* = .{
         .alloc = alloc,
         .app = app,
-        .list = try .init(alloc, title),
+        .list = try .init(alloc, title, app),
     };
 
     return self;
@@ -96,7 +96,7 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
 
         _ = child_win.child(child_opts);
 
-        var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
+        var style: vx.Cell.Style = .{ .dim = self.app.isAnyOverlayOpen() };
         if (term_row == self.list.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }

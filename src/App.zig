@@ -377,7 +377,7 @@ pub fn setMode(self: *App, mode: Editor.TextArea.Vim.Mode) void {
     }
 }
 
-pub fn isOverlayOpen(self: *App) bool {
+pub fn isAnyOverlayOpen(self: *App) bool {
     return self.buffer_list.list.isFocused();
 }
 

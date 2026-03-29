@@ -3,6 +3,7 @@ const List = @This();
 const std = @import("std");
 const vx = @import("vaxis");
 
+const App = @import("../App.zig");
 const Cell = @import("../tui/layout/Cell.zig");
 const ScrollView = @import("../tui/layout/ScrollView.zig");
 const fs = @import("../fs.zig");
@@ -10,6 +11,8 @@ const fs = @import("../fs.zig");
 /// The name of the DirectoryTree.
 /// We use this as the default column title.
 name: []const u8 = "",
+
+app: *App,
 
 /// The layout cell/column
 cell: *Cell,
@@ -211,13 +214,14 @@ pub const Item = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator, title: []const u8) !*List {
+pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*List {
     const self = try alloc.create(List);
 
     self.* = .{
         .name = title,
         .cell = try .init(alloc),
         .scroll_view = try .init(alloc),
+        .app = app,
     };
 
     self.cell.setWidth(self.default_width);
@@ -232,6 +236,11 @@ pub fn draw(self: *List, win: vx.Window) void {
         .rows = self.len(),
     });
     self.win = win;
+
+    // dim scrollbar if any overlay is open
+    if (self.scroll_view.view.vertical_scrollbar) |*vbar| {
+        vbar.fg.dim = self.app.isAnyOverlayOpen() and !self.isFocused();
+    }
 }
 
 pub inline fn drawHeader(

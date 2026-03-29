@@ -47,7 +47,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*BufferList
     self.* = .{
         .alloc = alloc,
         .app = app,
-        .list = try .init(alloc, title),
+        .list = try .init(alloc, title, app),
     };
 
     return self;

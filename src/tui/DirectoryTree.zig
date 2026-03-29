@@ -270,6 +270,8 @@ fn buildTreeItems(self: *DirectoryTree) !void {
     }
 }
 
+/// Expands the tree item at the `index` and recusively checks for
+/// expansion state of any children.
 fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
     if (index >= self.list.numItems() or self.app.mode == .insert) {
         return;

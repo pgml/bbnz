@@ -102,6 +102,18 @@ pub fn draw(self: *BufferList, win: vx.Window) !void {
         }
     }
 
+    self.list.scroll_view.line_numbers = .{
+        .num_lines = self.app.editor.textarea.numBufs() + 1,
+        .highlighted_line = @intCast(self.list.selected_index + 1),
+    };
+
+    self.list.scroll_view.drawLineNumbers(win, .{
+        .gutter_width = 3,
+        .x_off = self.list.getOffsetX() + 2,
+        .y_off = self.list.getOffsetY() + 1,
+        .height = self.list.getHeight() - 2,
+    });
+
     self.list.scroll_view.height = child_win.height;
     self.list.scroll_view.setRow(@intCast(self.list.selected_index));
     self.list.scroll_view.reposition();
@@ -136,8 +148,8 @@ fn writeLine(
                 }
             }
 
-            Cell.writeStr(win, &view, &col, row, item.str_index, style);
-            Cell.writeStr(win, &view, &col, row, "  ", style);
+            // we just make space for the line numbers here...
+            Cell.writeStr(win, &view, &col, row, "    ", style);
             Cell.writeStr(win, &view, &col, row, note_icon, icon_style);
             Cell.writeStr(win, &view, &col, row, " ", style);
         }

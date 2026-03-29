@@ -287,7 +287,8 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
         item.data.path,
     );
 
-    var i: usize = 0;
+    const meta = self.app.config.meta_infos;
+
     for (tmp_dir_entry) |entry| {
         const tree_item = try self.makeTreeItemFromEntry(entry, index, item.level + 1);
         const insert_index = index + 1;
@@ -295,7 +296,14 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
         // track the child directories so that we can free them properly
         // when we collapse this directory.
         try item.children.append(self.alloc, insert_index);
-        i += 1;
+
+        // recusively check children for expanded state
+        if (meta.files_info.get(tree_item.data.path)) |file_info| {
+            if (!file_info.is_expanded) {
+                continue;
+            }
+            try self.expandTreeItem(insert_index);
+        }
     }
 }
 

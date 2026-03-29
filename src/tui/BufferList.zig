@@ -18,7 +18,7 @@ app: *App,
 list: *List,
 
 /// default heigh of the list.
-default_height: u16 = 10,
+default_height: u16 = 12,
 
 default_x_off: u16 = 0,
 

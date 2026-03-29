@@ -28,6 +28,8 @@ pub const BufferListItem = struct {
     /// General list data
     data: List.Item,
 
+    buffer: ?*Buffer,
+
     str_index: []const u8 = "",
 
     is_placeholder: bool = false,
@@ -158,10 +160,9 @@ pub fn refresh(self: *BufferList) !void {
 
     // populate buffer list from editor buffers
     for (self.app.editor.textarea.buffers.items) |buf| {
-        var item = try self.makeListItem(buf.getName(), buf.path);
+        var item = try self.makeListItem(buf) orelse continue;
         self.alloc.free(item.str_index);
-        item.str_index = try std.fmt.allocPrint(self.alloc, "{}", .{buf.index});
-
+        item.str_index = try std.fmt.allocPrint(self.alloc, "{}", .{buf.index + 1});
         try self.list.items.append(self.alloc, item);
     }
 
@@ -170,7 +171,7 @@ pub fn refresh(self: *BufferList) !void {
     const content_height = self.default_height - 3; // minus borders
     if (self.list.numItems() < content_height) {
         for (self.list.numItems()..content_height) |_| {
-            const item = try self.makeListItem("", "");
+            const item = try self.makeListItem(null) orelse continue;
             item.is_placeholder = true;
             try self.list.items.append(self.alloc, item);
         }
@@ -181,7 +182,6 @@ pub fn refresh(self: *BufferList) !void {
 
 fn allocNoteItem(self: *BufferList, item: BufferListItem) !*BufferListItem {
     const note_item = try self.alloc.create(BufferListItem);
-
     const cell: *Cell = try .init(self.alloc);
     cell.setHeight(self.list.default_item_height);
 
@@ -194,16 +194,19 @@ fn allocNoteItem(self: *BufferList, item: BufferListItem) !*BufferListItem {
             .cell = cell,
             .is_temporary = item.data.is_temporary,
         },
+        .buffer = item.buffer,
     };
 
     return note_item;
 }
 
-fn makeListItem(
-    self: *BufferList,
-    name: []const u8,
-    path: []const u8,
-) !*BufferListItem {
+fn makeListItem(self: *BufferList, buffer: ?*Buffer) !?*BufferListItem {
+    var name: []const u8 = "";
+    var path: []const u8 = "";
+    if (buffer) |buf| {
+        name = buf.getName();
+        path = buf.path;
+    }
     const width = name.len + 3; // 3 = padding, icon, padding @todo, make it ugly
 
     const item = try self.allocNoteItem(.{
@@ -212,6 +215,7 @@ fn makeListItem(
             .width = @intCast(width),
             .path = path,
         },
+        .buffer = buffer,
         .is_placeholder = false,
     });
 
@@ -267,7 +271,7 @@ pub fn toggle(self: *BufferList) void {
 
 /// Switches the editor content to the selected buffer.
 pub fn select(self: *BufferList) void {
-    if (self.app.editor.textarea.numBufs() == 0) {
+    if (!self.app.editor.textarea.hasBuffers()) {
         return;
     }
 
@@ -282,8 +286,10 @@ pub fn select(self: *BufferList) void {
 /// Closes the selected buffer and refreshes the buffer list.
 pub fn closeBuf(self: *BufferList) void {
     if (self.selectedRow()) |row| {
-        self.app.editor.textarea.closeBuf(row.data.index);
-        self.list.selected_index = @intCast(self.app.editor.textarea.buffer);
+        const buf = row.buffer orelse return;
+        //const buf_index = self.app.editor.textarea.buffer;
+        self.app.editor.textarea.closeBuf(buf) catch return;
+        //self.list.selected_index = @intCast(buf_index);
         self.refresh() catch return;
     }
 }

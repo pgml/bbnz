@@ -276,7 +276,6 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     try buf.setContentFromFile(path);
     try buf.updatePrevVal();
 
-    buf.index = self.numBufs() + 1;
     self.setCurBufIndex(buf.index);
     self.goToTop();
 }
@@ -286,8 +285,8 @@ pub fn newScratchBuf(self: *TextArea, content: ?[]const u8) !void {
     const buf: *Buffer = self.buffers.getLast();
     const value = if (content != null) content.? else "";
     try buf.curRow().insertSliceAtCursor(value);
-
-    self.setCurBufIndex(self.numBufs() + 1);
+    buf.setIndex(self.numBufs() - 1);
+    self.setCurBufIndex(buf.index);
 }
 
 /// Opens a buffer with the given `path`.
@@ -339,64 +338,71 @@ pub fn findBuf(self: TextArea, path: []const u8) ?*Buffer {
 
 /// Closes the active buffer.
 pub fn closeCurBuf(self: *TextArea) void {
-    self.closeBuf(self.buffer);
+    if (!self.hasBuffers()) {
+        return;
+    }
+    self.closeBuf(self.curBuf()) catch return;
 }
 
 /// Closes a buffer with the given index.
-pub fn closeBuf(self: *TextArea, index: usize) void {
+pub fn closeBuf(self: *TextArea, buffer: *Buffer) !void {
     // do nothing of no buffers are open
-    if (self.numBufs() == 0) {
+    if (!self.hasBuffers()) {
         return;
     }
 
-    const indx = if (index > self.numBufs()) 0 else index;
+    const cur_buf_path = try self.alloc.dupe(u8, self.curBuf().path);
+    defer self.alloc.free(cur_buf_path);
 
+    var removed_buf: ?*Buffer = null;
     // get the array list index of the buffer index.
-    var buf_index: usize = 0;
     for (self.buffers.items) |item| {
-        if (item.index == indx) {
-            buf_index = item.index;
+        if (std.mem.eql(u8, item.path, buffer.path)) {
+            removed_buf = self.buffers.orderedRemove(item.index);
             break;
         }
     }
 
+    const buf: *Buffer = removed_buf orelse return;
     // Remove the buffer from the array list and free its memory
-    const buf: *Buffer = self.buffers.orderedRemove(buf_index);
-    buf.deinit();
-    self.alloc.destroy(buf);
+    defer buf.deinit();
+    defer self.alloc.destroy(buf);
 
-    var buffers = self.buffers.clone(self.alloc) catch return;
+    // rebuild buffers array and last notes array
+    var buffers = try self.buffers.clone(self.alloc);
     defer buffers.deinit(self.alloc);
 
     self.buffers.clearAndFree(self.alloc);
     self.buffers = .empty;
-
     self.app.config.meta_infos.last_notes.clearRetainingCapacity();
-    var i: usize = 0;
-    for (buffers.items) |buffer| {
-        buffer.index = i;
-        self.buffers.append(self.alloc, buffer) catch return;
-        self.app.config.meta_infos.setValue(.last_notes, buffer.path) catch return;
-        i += 1;
+
+    const meta_infos = self.app.config.meta_infos;
+
+    var index: usize = 0;
+    for (buffers.items) |item| {
+        item.setIndex(index);
+        try self.buffers.append(self.alloc, item);
+        try meta_infos.setValue(.last_notes, item.path);
+        index += 1;
     }
 
+    if (self.hasBuffers()) {
+        // update breadcrumb
+        if (std.mem.eql(u8, buf.path, cur_buf_path)) {
+            try self.parent.setBreadCrumb(self.curBuf());
+            try meta_infos.setValue(.last_open_note, self.curBuf().path);
+        }
+    }
     // if we closed the last buffer, clean up and focus notes
-    if (self.numBufs() == 0) {
+    else {
         self.alloc.free(self.parent.cell.title);
         self.app.focusColumn(.notes_list);
-        self.app.config.meta_infos.setValue(.last_open_note, "") catch return;
         self.setCurBufIndex(0);
-    }
-    // update breadcrumb
-    else {
-        self.setCurBufIndex(buf.index);
-        if (buf.index > self.numBufs()) {
-            self.setCurBufIndex(self.numBufs() - 1);
-        }
-        self.parent.setBreadCrumb(self.curBuf()) catch return;
+        try meta_infos.setValue(.last_open_note, "");
     }
 
-    self.app.config.meta_infos.write() catch return;
+    // write changes to meta config
+    try meta_infos.write();
 }
 
 pub inline fn numBufs(self: TextArea) usize {

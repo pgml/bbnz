@@ -92,13 +92,15 @@ const fn_registry = [_]FnMap{
     .{ .name = "goToTop",           .exec = .{ .input = goToTop }},
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
 
-    .{ .name = "listitem.create",      .exec = .{ .input = listCreate }},
-    .{ .name = "listitem.rename",      .exec = .{ .input = listRename }},
-    .{ .name = "listitem.cursorLeft",  .exec = .{ .input = listCursorLeft }},
-    .{ .name = "listitem.cursorRight", .exec = .{ .input = listCursorRight }} ,
-    .{ .name = "listitem.delChar",     .exec = .{ .input = listDeleteChar }},
-    .{ .name = "listitem.cancelEdit",  .exec = .{ .input = listCancelEdit }},
-    .{ .name = "listitem.confirmEdit", .exec = .{ .input = listConfirmEdit }},
+    .{ .name = "listitem.create",        .exec = .{ .input = listCreate }},
+    .{ .name = "listitem.rename",        .exec = .{ .input = listRename }},
+    .{ .name = "listitem.cursorLeft",    .exec = .{ .input = listCursorLeft }},
+    .{ .name = "listitem.cursorRight",   .exec = .{ .input = listCursorRight }} ,
+    .{ .name = "listitem.delChar",       .exec = .{ .input = listDeleteChar }},
+    .{ .name = "listitem.cancelEdit",    .exec = .{ .input = listCancelEdit }},
+    .{ .name = "listitem.confirmEdit",   .exec = .{ .input = listConfirmEdit }},
+    .{ .name = "listitem.halfPageDown",  .exec = .{ .input = listHalfPageDown }},
+    .{ .name = "listitem.halfPageUp",    .exec = .{ .input = listHalfPageUp }},
 
     .{ .name = "dirtree.treeExpand",   .exec = .{ .tree = DirectoryTree.cmdExpand }},
     .{ .name = "dirtree.treeCollapse", .exec = .{ .tree = DirectoryTree.cmdCollapse }},
@@ -912,6 +914,28 @@ pub fn listConfirmEdit(self: *Input, flags: ?Flags) void {
     switch (self.app.current_column) {
         .directory_tree => self.app.directory_tree.confirmEdit() catch return,
         .notes_list => self.app.notes_list.confirmEdit() catch return,
+        else => {},
+    }
+}
+
+pub fn listHalfPageUp(self: *Input, flags: ?Flags) void {
+    _ = flags;
+
+    switch (self.app.current_column) {
+        .directory_tree => self.app.directory_tree.list.halfPageUp(),
+        .notes_list => self.app.notes_list.list.halfPageUp(),
+        .buffer_list => self.app.buffer_list.list.halfPageUp(),
+        else => {},
+    }
+}
+
+pub fn listHalfPageDown(self: *Input, flags: ?Flags) void {
+    _ = flags;
+
+    switch (self.app.current_column) {
+        .directory_tree => self.app.directory_tree.list.halfPageDown(),
+        .notes_list => self.app.notes_list.list.halfPageDown(),
+        .buffer_list => self.app.buffer_list.list.halfPageDown(),
         else => {},
     }
 }

@@ -49,8 +49,9 @@ mode normal(Folders, Notes) {
     bind "dd"    fn: cutListItem          #todo
     bind "p"     fn: pasteListItem        #todo
     bind "r"     fn: refreshList          #todo
+    bind "C-d"   fn: listitem.halfPageDown
+    bind "C-u"   fn: listitem.halfPageUp
 }
-
 
 mode insert(Folders, Notes) {
     bind "left"        fn: listitem.cursorLeft

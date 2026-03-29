@@ -335,6 +335,54 @@ pub fn lineUp(self: *List) void {
     self.clampIndex(null);
 }
 
+/// Moves the view up half the viewport size centering the cursor.
+/// If the buffer's content is larger than the viewport.
+pub fn halfPageUp(self: *List) void {
+    const half_height = self.getHeight() / 2;
+    const row = self.selected_index;
+    const new_row = std.math.clamp(row - half_height, 0, self.numItems());
+
+    const min = self.scroll_view.view.scroll.y;
+
+    if (new_row <= min) {
+        if (min > half_height) {
+            self.scroll_view.view.scroll.y -= half_height;
+        } else {
+            self.goToTop();
+        }
+    }
+
+    if (min == 0) {
+        self.goToTop();
+    } else {
+        self.selected_index = new_row;
+    }
+}
+
+/// Moves the view down half the viewport size centering the cursor.
+/// If the buffer's content is larger than the viewport.
+pub fn halfPageDown(self: *List) void {
+    const half_height = self.getHeight() / 2;
+    const new_index = std.math.clamp(
+        self.selected_index + half_height,
+        0,
+        self.numItems(),
+    );
+
+    const min = self.scroll_view.view.scroll.y;
+    const max = min + self.getHeight() - 1;
+
+    if (new_index >= max) {
+        self.scroll_view.view.scroll.y += half_height;
+    }
+
+    if (max == self.numItems()) {
+        self.goToBottom();
+    } else {
+        self.selected_index = new_index;
+    }
+}
+
 /// Returns the length of the item array list
 pub fn len(self: List) usize {
     return self.items.items.len;

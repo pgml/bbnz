@@ -10,7 +10,7 @@ const log = @import("log.zig");
 const tui = @import("tui/tui.zig");
 const BufferList = tui.BufferList;
 const DirectoryTree = tui.DirectoryTree;
-const Editor = tui.Editor;
+pub const Editor = tui.Editor;
 const NotesList = tui.NotesList;
 const StatusBar = tui.StatusBar;
 
@@ -303,13 +303,17 @@ pub fn focusColumn(self: *App, col: Column) void {
 /// currently selected column.
 pub fn focusNextColumn(self: *App, cycle: bool) void {
     const num_cols = 3;
-    var current_col_index = @intFromEnum(self.current_column);
+    var cur_col = @intFromEnum(self.current_column);
 
-    if (cycle and current_col_index == num_cols) {
-        current_col_index = 0;
+    // Get to the first column if cycling is enabled and we're either
+    // currently focusing the editor or notes list with no open buffers
+    if ((cycle and cur_col == num_cols) or
+        (cycle and cur_col == 2 and self.editor.textarea.numBufs() == 0))
+    {
+        cur_col = 0;
     }
 
-    const index = @min(current_col_index + 1, num_cols);
+    const index = @min(cur_col + 1, num_cols);
     return self.focusColumn(@enumFromInt(index));
 }
 
@@ -320,7 +324,13 @@ pub fn focusPrevColumn(self: *App, cycle: bool) void {
     var cur_col = @intFromEnum(self.current_column);
 
     if (cycle and cur_col == 1) {
-        cur_col = 4;
+        // go to the editor or the notes list depending on whether
+        // the editor has buffers
+        if (self.editor.textarea.numBufs() == 0) {
+            cur_col = 3;
+        } else {
+            cur_col = 4;
+        }
     }
 
     const column = @max(cur_col - 1, first_col);

@@ -17,6 +17,8 @@ alloc: std.mem.Allocator,
 
 app: *App,
 
+parent: *App.Editor,
+
 /// List of open text buffers
 buffers: std.ArrayList(*Buffer),
 
@@ -120,14 +122,14 @@ pub const Selection = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator, app: *App) !TextArea {
+pub fn init(alloc: std.mem.Allocator, app: *App, parent: *App.Editor) !TextArea {
     const self: TextArea = .{
         .alloc = alloc,
         .app = app,
+        .parent = parent,
         .buffers = .empty,
         .buffer = 0,
         .vim = try .init(alloc),
-        .use_virtual_cursor = app.config.@"virtual-cursor",
     };
 
     return self;
@@ -164,8 +166,6 @@ pub fn update(self: *TextArea, event: Event) !void {
 }
 
 pub fn draw(self: *TextArea) !void {
-    var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
-
     if (self.win == null or
         self.scroll_view == null or
         !self.hasBuffers())
@@ -185,6 +185,8 @@ pub fn draw(self: *TextArea) !void {
     if (self.app.curevent == .key_press) {
         buf.updateCursorPos();
     }
+
+    var style: vx.Cell.Style = .{ .dim = self.app.isOverlayOpen() };
     var i: usize = 0;
 
     const start = view.scroll.y;
@@ -251,7 +253,7 @@ pub fn draw(self: *TextArea) !void {
 }
 
 pub fn getLnInfo(self: *TextArea, buf: []u8) ![]const u8 {
-    const ta_buf = self.app.editor.textarea.curBuf();
+    const ta_buf = self.curBuf();
     return try std.fmt.bufPrint(
         buf,
         "Ln {}, Col {}",
@@ -274,7 +276,8 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     try buf.setContentFromFile(path);
     try buf.updatePrevVal();
 
-    self.buffer = self.numBufs() + 1;
+    buf.index = self.numBufs() + 1;
+    self.setCurBufIndex(buf.index);
     self.goToTop();
 }
 
@@ -284,14 +287,16 @@ pub fn newScratchBuf(self: *TextArea, content: ?[]const u8) !void {
     const value = if (content != null) content.? else "";
     try buf.curRow().insertSliceAtCursor(value);
 
-    self.buffer = self.numBufs() + 1;
+    self.setCurBufIndex(self.numBufs() + 1);
 }
 
 /// Opens a buffer with the given `path`.
 /// If no buffer is found it attempts to create a new buffer with `path`.
 pub fn openBuf(self: *TextArea, path: []const u8) !void {
+    if (std.mem.eql(u8, path, "")) return;
+
     if (self.findBuf(path)) |buffer| {
-        self.buffer = buffer.index;
+        self.setCurBufIndex(buffer.index);
     } else {
         try self.newBuf(path);
     }
@@ -332,21 +337,87 @@ pub fn findBuf(self: TextArea, path: []const u8) ?*Buffer {
     return null;
 }
 
-pub fn numBufs(self: TextArea) usize {
+/// Closes the active buffer.
+pub fn closeCurBuf(self: *TextArea) void {
+    self.closeBuf(self.buffer);
+}
+
+/// Closes a buffer with the given index.
+pub fn closeBuf(self: *TextArea, index: usize) void {
+    // do nothing of no buffers are open
+    if (self.numBufs() == 0) {
+        return;
+    }
+
+    const indx = if (index > self.numBufs()) 0 else index;
+
+    // get the array list index of the buffer index.
+    var buf_index: usize = 0;
+    for (self.buffers.items) |item| {
+        if (item.index == indx) {
+            buf_index = item.index;
+            break;
+        }
+    }
+
+    // Remove the buffer from the array list and free its memory
+    const buf: *Buffer = self.buffers.orderedRemove(buf_index);
+    buf.deinit();
+    self.alloc.destroy(buf);
+
+    var buffers = self.buffers.clone(self.alloc) catch return;
+    defer buffers.deinit(self.alloc);
+
+    self.buffers.clearAndFree(self.alloc);
+    self.buffers = .empty;
+
+    self.app.config.meta_infos.last_notes.clearRetainingCapacity();
+    var i: usize = 0;
+    for (buffers.items) |buffer| {
+        buffer.index = i;
+        self.buffers.append(self.alloc, buffer) catch return;
+        self.app.config.meta_infos.setValue(.last_notes, buffer.path) catch return;
+        i += 1;
+    }
+
+    // if we closed the last buffer, clean up and focus notes
+    if (self.numBufs() == 0) {
+        self.alloc.free(self.parent.cell.title);
+        self.app.focusColumn(.notes_list);
+        self.app.config.meta_infos.setValue(.last_open_note, "") catch return;
+        self.setCurBufIndex(0);
+    }
+    // update breadcrumb
+    else {
+        self.setCurBufIndex(buf.index);
+        if (buf.index > self.numBufs()) {
+            self.setCurBufIndex(self.numBufs() - 1);
+        }
+        self.parent.setBreadCrumb(self.curBuf()) catch return;
+    }
+
+    self.app.config.meta_infos.write() catch return;
+}
+
+pub inline fn numBufs(self: TextArea) usize {
     return self.buffers.items.len;
 }
 
-pub fn hasBuffers(self: TextArea) bool {
+pub inline fn hasBuffers(self: TextArea) bool {
     return self.numBufs() > 0;
 }
 
 /// Returns the current buffer.
 pub fn curBuf(self: TextArea) *Buffer {
     var buf_index = self.buffer;
-    if (buf_index > self.numBufs()) {
+    if (buf_index > self.numBufs() - 1) {
         buf_index = self.numBufs() - 1;
     }
     return self.buffers.items[buf_index];
+}
+
+inline fn setCurBufIndex(self: *TextArea, index: usize) void {
+    self.buffer = index;
 }
 
 /// Enables vim motions.
@@ -1254,9 +1325,11 @@ pub fn getTermRow(self: TextArea) usize {
 }
 
 pub fn deinit(self: *TextArea) void {
-    for (self.buffers.items) |buffer| {
-        buffer.deinit();
-        self.alloc.destroy(buffer);
+    if (self.numBufs() > 0) {
+        for (self.buffers.items) |buffer| {
+            buffer.deinit();
+            self.alloc.destroy(buffer);
+        }
     }
     self.buffers.deinit(self.alloc);
     self.vim.deinit();

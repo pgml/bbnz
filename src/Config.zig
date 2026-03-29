@@ -192,7 +192,8 @@ pub const MetaInfos = struct {
                 }
             },
             .pointer => |ptr| {
-                if (ptr.child == u8) {
+                // allow empty strings as well
+                if (ptr.child == u8 or ptr.child == [0:0]u8) {
                     switch (opt) {
                         .last_directory => {
                             self.alloc.free(self.last_directory);
@@ -278,7 +279,8 @@ pub const MetaInfos = struct {
         try write_stream.writeString(self.last_open_note);
 
         try write_stream.beginKeyPair(Options.last_notes.str());
-        const last_notes = try std.mem.join(self.alloc, ",", self.last_notes.items);
+        const last_notes = try self.getLastNotesStr();
+        defer self.alloc.free(last_notes);
         try write_stream.writeString(last_notes);
 
         try write_stream.beginKeyPair(Options.current_column.str());
@@ -314,8 +316,6 @@ pub const MetaInfos = struct {
 
         try write_stream.writer.writeByte('\n');
         try write_stream.writer.flush();
-
-        self.alloc.free(last_notes);
     }
 
     fn lastNotesContain(self: *MetaInfos, path: []const u8) bool {
@@ -325,6 +325,15 @@ pub const MetaInfos = struct {
             }
         }
         return false;
+    }
+
+    fn getLastNotesStr(self: MetaInfos) ![]const u8 {
+        var last_notes = try std.mem.join(self.alloc, ",", self.last_notes.items);
+        // prevent starting comma
+        if (std.mem.startsWith(u8, last_notes, ",")) {
+            last_notes = last_notes[1..];
+        }
+        return last_notes;
     }
 
     pub fn deinit(self: *MetaInfos) void {

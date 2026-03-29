@@ -91,7 +91,6 @@ const fn_registry = [_]FnMap{
     .{ .name = "focusPrevColumn",   .exec = .{ .app = App.cmdPrevCol }},
     .{ .name = "goToTop",           .exec = .{ .input = goToTop }},
     .{ .name = "goToBottom",        .exec = .{ .input = goToBottom }},
-    .{ .name = "closeNote",         .exec = .{ .input = closeNote }},
 
     .{ .name = "listitem.create",      .exec = .{ .input = listCreate }},
     .{ .name = "listitem.rename",      .exec = .{ .input = listRename }},
@@ -104,16 +103,18 @@ const fn_registry = [_]FnMap{
     .{ .name = "dirtree.treeExpand",   .exec = .{ .tree = DirectoryTree.cmdExpand }},
     .{ .name = "dirtree.treeCollapse", .exec = .{ .tree = DirectoryTree.cmdCollapse }},
 
-    .{ .name = "bufferlist.toggle",    .exec = .{ .buffers = BufferList.cmdToggle }},
-    .{ .name = "bufferlist.lineDown",  .exec = .{ .buffers = BufferList.cmdLineDown }},
-    .{ .name = "bufferlist.lineUp",    .exec = .{ .buffers = BufferList.cmdLineUp }},
-    .{ .name = "bufferlist.select",    .exec = .{ .buffers = BufferList.cmdSelect }},
+    .{ .name = "bufferlist.toggle",      .exec = .{ .buffers = BufferList.toggle }},
+    .{ .name = "bufferlist.closeBuffer", .exec = .{ .buffers = BufferList.closeBuf }},
+    .{ .name = "bufferlist.lineDown",    .exec = .{ .buffers = BufferList.lineDown }},
+    .{ .name = "bufferlist.lineUp",      .exec = .{ .buffers = BufferList.lineUp }},
+    .{ .name = "bufferlist.select",      .exec = .{ .buffers = BufferList.select }},
 
     .{ .name = "statusbar.deleteBefore",  .exec = .{ .input = statusBarDeleteBefore }},
 
     // VIM/Editor stuff
-    .{ .name = "editor.lineStart",   .exec = .{ .vim = Vim.beginLine }},
-    .{ .name = "editor.lineEnd",     .exec = .{ .textarea = TextArea.lineEnd }},
+    .{ .name = "editor.lineStart",          .exec = .{ .vim = Vim.beginLine }},
+    .{ .name = "editor.lineEnd",            .exec = .{ .textarea = TextArea.lineEnd }},
+    .{ .name = "editor.closeCurrentBuffer", .exec = .{ .textarea = TextArea.closeCurBuf }},
 
     .{ .name = "editor.insertAfterLine",   .exec = .{ .vim = Vim.edit }},
     .{ .name = "editor.changeAfterCursor", .exec = .{ .vim = Vim.del }},

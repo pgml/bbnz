@@ -43,7 +43,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*Editor {
         .app = app,
         .name = title,
         .cell = try .init(alloc),
-        .textarea = try .init(alloc, app),
+        .textarea = try .init(alloc, app, self),
         .scroll_view = try .init(self.alloc),
     };
 
@@ -69,6 +69,14 @@ pub fn update(self: *Editor, event: App.Event) !void {
 }
 
 pub fn draw(self: *Editor, win: vx.Window) void {
+    // hide the editor cursor and reset the breadcrumb if no buffers are open.
+    if (self.textarea.numBufs() == 0) {
+        if (!std.mem.eql(u8, self.cell.title, self.name)) {
+            self.cell.title = self.alloc.dupe(u8, self.name) catch return;
+        }
+        win.hideCursor();
+    }
+
     var child_win: vx.Window = win.child(self.cell.getChild());
     const gutter_width = 6;
     const top_padding = 0;
@@ -146,15 +154,13 @@ pub fn openBuf(self: *Editor, path: []const u8, save_to_conf: bool) !void {
         view.reposition();
     }
 
-    // get breadcrumb
-    var bc_buf: [256]u8 = undefined;
-    self.alloc.free(self.cell.title);
-    self.cell.title = try self.alloc.dupe(u8, try self.buildBreadCrumb(&bc_buf));
+    try self.setBreadCrumb(self.textarea.curBuf());
 
     const note_path = self.textarea.curBuf().path;
     if (save_to_conf) {
         try self.app.config.meta_infos.setValue(.last_open_note, note_path);
     }
+
     try self.app.config.meta_infos.setValue(.last_notes, note_path);
     try self.app.config.meta_infos.write();
 }
@@ -186,12 +192,19 @@ pub fn getRelativeBufPath(self: Editor, no_file: bool) []const u8 {
     return "";
 }
 
-fn buildBreadCrumb(self: Editor, out: []u8) ![]const u8 {
+pub fn setBreadCrumb(self: Editor, buf: ?*Buffer) !void {
+    self.alloc.free(self.cell.title);
+    var bc_buf: [256]u8 = undefined;
+    const breadcrumb = try self.app.editor.buildBreadCrumb(&bc_buf, buf);
+    self.cell.title = try self.alloc.dupe(u8, breadcrumb);
+}
+
+pub fn buildBreadCrumb(self: Editor, out: []u8, buffer: ?*Buffer) ![]const u8 {
     if (!self.textarea.hasBuffers()) {
         return "";
     }
 
-    const buf: *Buffer = self.textarea.curBuf();
+    const buf: *Buffer = buffer orelse self.textarea.curBuf();
     const rel_path = self.getRelativeBufPath(true);
 
     if (rel_path.len == 0) {

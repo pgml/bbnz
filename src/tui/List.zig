@@ -339,8 +339,8 @@ pub fn numItems(self: List) usize {
         self.len();
 }
 
-pub fn clampIndex(self: *List, max: ?usize) void {
-    const max_items = max orelse self.numItems();
+pub fn clampIndex(self: *List, max: ?isize) void {
+    const max_items = max orelse @as(isize, @intCast(self.numItems()));
     self.selected_index = std.math.clamp(self.selected_index, 0, max_items);
 }
 

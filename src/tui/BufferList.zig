@@ -53,9 +53,6 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*BufferList
 
 pub fn update(self: *BufferList, event: App.Event) !void {
     switch (event) {
-        .key_press => |key| {
-            _ = key;
-        },
         .winsize => |ws| {
             self.default_x_off = ws.cols / 3;
             self.list.setWidth(self.default_x_off);
@@ -63,6 +60,13 @@ pub fn update(self: *BufferList, event: App.Event) !void {
             self.list.toggleVbar(self.default_height, self.list.numItems());
         },
         else => {},
+    }
+
+    // Ensure that the selected row is at least at the last real buffer row
+    if (self.app.editor.textarea.numBufs() <= self.list.selected_index and
+        self.list.selected_index > 0)
+    {
+        self.list.selected_index -= 1;
     }
 }
 
@@ -75,42 +79,30 @@ pub fn draw(self: *BufferList, win: vx.Window) !void {
     const top_vis_row = self.list.getTopVisRow();
     const bottom_vis_row = self.list.getBottomVisRow();
 
-    var i: usize = 0;
-    for (self.list.getItemsSlice()[top_vis_row..bottom_vis_row]) |item| {
-        const buffer: *BufferListItem = @ptrCast(@alignCast(item));
-        const term_row: usize = top_vis_row + i;
-        buffer.data.cell.setHeight(self.list.default_item_height);
-        var child_opts = buffer.data.cell.getChild();
-        // reset border for each tree item
-        child_opts.border = .{};
+    // don't show any content including selections when no buffers are present
+    if (self.app.editor.textarea.numBufs() > 0) {
+        var i: usize = 0;
+        for (self.list.getItemsSlice()[top_vis_row..bottom_vis_row]) |item| {
+            const buffer: *BufferListItem = @ptrCast(@alignCast(item));
+            const term_row: u16 = @intCast(top_vis_row + i);
 
-        _ = child_win.child(child_opts);
+            buffer.data.cell.setHeight(self.list.default_item_height);
 
-        var style: vx.Cell.Style = .{};
-        if (term_row == self.list.selected_index) {
-            style.bg = theme.Color.List.selection_bg;
+            var style: vx.Cell.Style = .{};
+            if (term_row == self.list.selected_index) {
+                style.bg = theme.Color.List.selection_bg;
+            }
+
+            const width = self.list.getWidth();
+            try self.writeLine(buffer, term_row, width, style);
+            buffer.data.index = term_row;
+            i += 1;
         }
-
-        try self.writeLine(buffer, @intCast(term_row), self.list.getWidth(), style);
-        buffer.data.index = @intCast(term_row);
-        i += 1;
     }
 
     self.list.scroll_view.height = child_win.height;
     self.list.scroll_view.setRow(@intCast(self.list.selected_index));
     self.list.scroll_view.reposition();
-}
-
-pub fn cmdToggle(self: *BufferList) void {
-    if (self.list.isFocused()) {
-        self.list.setFocus(false);
-        self.app.focusColumn(self.app.last_column);
-    } else {
-        self.refresh() catch return;
-        self.list.setFocus(true);
-        self.app.last_column = self.app.current_column;
-        self.app.focusColumn(.buffer_list);
-    }
 }
 
 fn writeLine(
@@ -160,14 +152,17 @@ fn writeLine(
     item.data.width = @intCast(w);
 }
 
+/// Rebuilds the buffer list from open editor buffers
 pub fn refresh(self: *BufferList) !void {
     self.freeListItems();
-    var index: usize = 1;
-    for (self.app.editor.textarea.buffers.items) |buffer| {
-        var item = try self.makeListItem(buffer.getName(), buffer.path);
-        item.str_index = try std.fmt.allocPrint(self.alloc, "{}", .{index});
+
+    // populate buffer list from editor buffers
+    for (self.app.editor.textarea.buffers.items) |buf| {
+        var item = try self.makeListItem(buf.getName(), buf.path);
+        self.alloc.free(item.str_index);
+        item.str_index = try std.fmt.allocPrint(self.alloc, "{}", .{buf.index});
+
         try self.list.items.append(self.alloc, item);
-        index += 1;
     }
 
     // Fill remaining rows with empty items to prevent notes from showing.
@@ -229,6 +224,7 @@ inline fn getItem(self: BufferList, index: usize) ?*BufferListItem {
     return list_item;
 }
 
+/// Returns the selected buffer.
 pub fn selectedRow(self: BufferList) ?*BufferListItem {
     if (self.getItem(@intCast(self.list.selected_index))) |item| {
         const row: *BufferListItem = @ptrCast(@alignCast(item));
@@ -237,29 +233,59 @@ pub fn selectedRow(self: BufferList) ?*BufferListItem {
     return null;
 }
 
-pub fn cmdLineDown(self: *BufferList) void {
-    self.list.lineDown();
-    self.list.clampIndex(self.app.editor.textarea.numBufs() - 1);
-}
-
-pub fn cmdLineUp(self: *BufferList) void {
-    self.list.lineUp();
-}
-
-pub fn selectedNote(self: BufferList) ?*BufferListItem {
-    if (self.getItem(@intCast(self.list.selected_index))) |item| {
-        const note: *BufferListItem = @ptrCast(@alignCast(item));
-        return note;
+/// Moves the selection one row down.
+pub fn lineDown(self: *BufferList) void {
+    if (self.app.editor.textarea.numBufs() > 0) {
+        const num_bufs: isize = @intCast(self.app.editor.textarea.numBufs());
+        self.list.lineDown();
+        self.list.clampIndex(num_bufs - 1);
     }
-    return null;
 }
 
-pub fn cmdSelect(self: *BufferList) void {
-    if (self.selectedNote()) |note| {
+/// Moves the selection one row up.
+pub fn lineUp(self: *BufferList) void {
+    if (self.app.editor.textarea.numBufs() > 0) {
+        self.list.lineUp();
+    }
+}
+
+/// Shows and focuses the buffer list if hidden
+/// or hides it and focuses the last focused column
+/// before the list was opened.
+pub fn toggle(self: *BufferList) void {
+    if (self.list.isFocused()) {
+        self.list.setFocus(false);
+        self.app.focusColumn(self.app.last_column);
+    } else {
+        self.list.selected_index = 0;
+        self.refresh() catch return;
+        self.list.setFocus(true);
+        self.app.last_column = self.app.current_column;
+        self.app.focusColumn(.buffer_list);
+    }
+}
+
+/// Switches the editor content to the selected buffer.
+pub fn select(self: *BufferList) void {
+    if (self.app.editor.textarea.numBufs() == 0) {
+        return;
+    }
+
+    if (self.selectedRow()) |note| {
         self.app.editor.openBuf(note.data.path, true) catch return;
     }
+
     self.list.setFocus(false);
     self.app.focusColumn(self.app.last_column);
+}
+
+/// Closes the selected buffer and refreshes the buffer list.
+pub fn closeBuf(self: *BufferList) void {
+    if (self.selectedRow()) |row| {
+        self.app.editor.textarea.closeBuf(row.data.index);
+        self.list.selected_index = @intCast(self.app.editor.textarea.buffer);
+        self.refresh() catch return;
+    }
 }
 
 fn freeListItems(self: *BufferList) void {

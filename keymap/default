@@ -70,6 +70,8 @@ mode normal(BufferList) {
     bind "j"      fn: bufferlist.lineDown
     bind "k"      fn: bufferlist.lineUp
     bind "enter"  fn: bufferlist.select
+    bind "gg"     fn: goToTop
+    bind "G"      fn: goToBottom
 }
 
 # —————————————————————————————————————————————————————————————————————————————

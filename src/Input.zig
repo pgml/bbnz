@@ -728,6 +728,7 @@ fn goToTop(self: *Input, flags: ?Flags) void {
     switch (self.app.current_column) {
         .directory_tree => self.app.directory_tree.list.goToTop(),
         .notes_list => self.app.notes_list.list.goToTop(),
+        .buffer_list => self.app.buffer_list.list.goToTop(),
         else => {},
     }
 }
@@ -737,6 +738,7 @@ fn goToBottom(self: *Input, flags: ?Flags) void {
     switch (self.app.current_column) {
         .directory_tree => self.app.directory_tree.list.goToBottom(),
         .notes_list => self.app.notes_list.list.goToBottom(),
+        .buffer_list => self.app.buffer_list.goToBottom(),
         else => {},
     }
 }

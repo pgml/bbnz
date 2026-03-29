@@ -253,6 +253,16 @@ pub fn lineUp(self: *BufferList) void {
     }
 }
 
+/// Moves the selection to the last item.
+/// This differs slightly from the general goToBottom function.
+///
+/// Since the buffer list uses empty rows to simulate background colour and
+/// not letting content from under the list leak through we need to set
+/// the selected index to the number of actual open buffers.
+pub fn goToBottom(self: *BufferList) void {
+    self.list.selected_index = @intCast(self.app.editor.textarea.numBufs() - 1);
+}
+
 /// Shows and focuses the buffer list if hidden
 /// or hides it and focuses the last focused column
 /// before the list was opened.

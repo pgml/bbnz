@@ -270,7 +270,7 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
     var buf: *Buffer = self.buffers.getLast();
     // use the arena from the buffer since the history is tied to it.
     buf.history = try .init(buf.alloc);
-    try buf.setPath(path);
+    try buf.setPaths(path);
     buf.setIndex(self.numBufs() - 1);
 
     try buf.setContentFromFile(path);

@@ -34,6 +34,13 @@ pub const BufferListItem = struct {
 
     is_placeholder: bool = false,
 
+    pub fn getRelPath(self: BufferListItem) []const u8 {
+        if (self.buffer) |buf| {
+            return buf.rel_path;
+        }
+        return "";
+    }
+
     pub fn deinit(self: *BufferListItem, alloc: std.mem.Allocator) void {
         alloc.free(self.data.path);
         alloc.free(self.str_index);
@@ -133,18 +140,21 @@ fn writeLine(
     if (self.list.win) |win| {
         Cell.writeStr(win, &view, &col, row, " ", style);
 
+        var path_style: vx.Style = .{ .fg = theme.Color.Border.fg };
         if (!item.is_placeholder) {
             var icon_style: vx.Style = .{ .fg = theme.Color.List.note_fg };
+            var note_icon = Icon.getNerd(.note);
+
             if (self.selectedRow()) |selected_item| {
                 if (selected_item == item) {
                     icon_style.fg = theme.Color.default_fg;
                     icon_style.bg = theme.Color.List.selection_bg;
-                }
-            }
-            var note_icon = Icon.getNerd(.note);
-            if (self.selectedRow()) |selected_item| {
-                if (self.list.is_insert and selected_item == item) {
-                    note_icon = Icon.getNerd(.pen);
+
+                    if (self.list.is_insert) {
+                        note_icon = Icon.getNerd(.pen);
+                    }
+
+                    path_style.bg = theme.Color.List.selection_bg;
                 }
             }
 
@@ -154,6 +164,9 @@ fn writeLine(
             Cell.writeStr(win, &view, &col, row, " ", style);
         }
         Cell.writeStr(win, &view, &col, row, item.data.getName(false), style);
+        Cell.writeStr(win, &view, &col, row, "  ", style);
+
+        Cell.writeStr(win, &view, &col, row, item.getRelPath(), path_style);
 
         w = col;
 

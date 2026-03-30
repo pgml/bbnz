@@ -9,6 +9,7 @@ const Key = vx.Key;
 const Dmp = @import("diffmatchpatch");
 
 const Cell = @import("../../layout/Cell.zig");
+const Config = @import("../../../Config.zig");
 const fs = @import("../../../fs.zig");
 const TextArea = @import("TextArea.zig");
 const Char = Cell.Character;
@@ -59,6 +60,9 @@ cursor_pos: CursorPos = .{},
 
 /// The path of the file that is loaded into the buffer.
 path: []const u8 = "",
+
+/// The path of the file that is loaded into the buffer.
+rel_path: []const u8 = "",
 
 pub const CursorPos = struct {
     row: i32 = 0,
@@ -371,8 +375,23 @@ pub fn setIndex(self: *Buffer, index: usize) void {
     self.index = index;
 }
 
-pub fn setPath(self: *Buffer, path: []const u8) !void {
+pub fn setPaths(self: *Buffer, path: []const u8) !void {
     self.path = try self.alloc.dupe(u8, path);
+
+    const notes_root = try Config.getNotesRootDirAlloc(self.alloc);
+
+    if (!std.mem.startsWith(u8, self.path, notes_root)) {
+        return;
+    }
+
+    self.rel_path = self.path[notes_root.len..];
+
+    if (std.fs.path.dirname(path)) |dir_name| {
+        const len = dir_name.len - notes_root.len;
+        const p: []u8 = @constCast(self.rel_path);
+        _ = std.mem.replace(u8, dir_name, notes_root, "", p);
+        self.rel_path = self.rel_path[1..len];
+    }
 }
 
 pub fn setContentFromStr(self: *Buffer, content: []const u8) !void {

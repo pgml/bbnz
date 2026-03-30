@@ -408,6 +408,26 @@ pub fn getNotesRootDir(self: Config) ![]const u8 {
     return "";
 }
 
+pub fn getNotesRootDirAlloc(alloc: std.mem.Allocator) ![]const u8 {
+    var arena: std.heap.ArenaAllocator = .init(alloc);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    if (try known_folders.getPath(arena_alloc, .home)) |home_path| {
+        const notes_dir_path: []const u8 = try std.mem.concat(
+            arena_alloc,
+            u8,
+            &[_][]const u8{ home_path, "/.", application_name },
+        );
+
+        try getCreateDir(notes_dir_path, home_path);
+
+        return notes_dir_path;
+    }
+
+    return "";
+}
+
 fn getCreateDir(dir_path: []const u8, parent: []const u8) !void {
     var parent_dir: std.fs.Dir = try std.fs.openDirAbsolute(parent, .{});
 

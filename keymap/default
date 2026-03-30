@@ -44,7 +44,7 @@ mode normal(Folders, Notes) {
     bind "k"     fn: lineUp
     bind "R"     fn: listitem.rename
     bind "D"     fn: delListItem          #todo
-    bind "P"     fn: togglePinListItem    #todo
+    bind "P"     fn: listitem.togglePin
     bind "yy"    fn: yankListItem         #todo
     bind "dd"    fn: cutListItem          #todo
     bind "p"     fn: pasteListItem        #todo

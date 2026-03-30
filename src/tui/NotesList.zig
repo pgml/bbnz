@@ -76,7 +76,7 @@ pub fn update(self: *NotesList, event: App.Event) !void {
     self.list.is_insert = self.app.mode == .insert and self.list.isFocused();
 }
 
-pub fn draw(self: *NotesList, win: vx.Window) void {
+pub fn draw(self: *NotesList, win: vx.Window) !void {
     const opts = self.list.cell.getChild();
     const child_win = win.child(opts);
 
@@ -86,22 +86,24 @@ pub fn draw(self: *NotesList, win: vx.Window) void {
     const bottom_vis_row = self.list.getBottomVisRow();
 
     var i: usize = 0;
-    for (self.list.getItemsSlice()[top_vis_row..bottom_vis_row]) |item| {
+    const items = self.list.getItemsSlice();
+    for (items[top_vis_row..bottom_vis_row]) |item| {
         const note: *NoteItem = @ptrCast(@alignCast(item));
+
         const term_row: usize = top_vis_row + i;
         note.data.cell.setHeight(self.list.default_item_height);
         var child_opts = note.data.cell.getChild();
         // reset border for each tree item
         child_opts.border = .{};
 
-        _ = child_win.child(child_opts);
+        _ = win.child(child_opts);
 
         var style: vx.Cell.Style = .{ .dim = self.app.isAnyOverlayOpen() };
         if (term_row == self.list.selected_index) {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        self.writeLine(note, @intCast(term_row), self.list.getWidth(), style);
+        self.drawLine(note, @intCast(term_row), style);
         note.data.index = @intCast(term_row);
         i += 1;
 
@@ -122,64 +124,91 @@ pub inline fn drawHeader(self: NotesList, win: vx.Window) void {
     });
 }
 
-fn writeLine(
-    self: NotesList,
+const LineArgs = struct {
     item: *NoteItem,
     row: u16,
-    width: u16,
-    style: vx.Cell.Style,
-) void {
+    style: vx.Style,
+};
+
+/// Draws a list row displaying icon and name and calculates the width
+/// of the row.
+fn drawLine(self: NotesList, item: *NoteItem, row: u16, style: vx.Cell.Style) void {
+    const win = self.list.win orelse return;
+
     var col: u16 = 0;
-    var w: usize = 0;
+    var lwidth: usize = 0;
     var view = self.list.scroll_view.view;
 
-    if (self.list.win) |win| {
-        Cell.writeStr(win, &view, &col, row, " ", style);
+    const line_args: LineArgs = .{
+        .item = item,
+        .row = row,
+        .style = style,
+    };
 
-        var icon_style: vx.Style = .{
-            .fg = theme.Color.List.note_fg,
-            .dim = style.dim,
-        };
-        if (self.selectedNote()) |selected_note| {
-            if (selected_note == item) {
-                icon_style.fg = theme.Color.default_fg;
-                icon_style.bg = theme.Color.List.selection_bg;
-            }
-        }
+    Cell.writeSpacer(win, &view, &col, row, style);
+    self.drawIcon(&col, line_args);
 
-        var note_icon = Icon.getNerd(.note);
-        if (self.selectedNote()) |note| {
-            if (self.list.is_insert and note == item) {
+    Cell.writeSpacer(win, &view, &col, row, style);
+    self.drawName(&col, line_args);
+
+    lwidth = col;
+
+    // pad the rest of the line to make the selection expand to the whole row
+    while (col < self.list.getWidth()) {
+        Cell.writeSpacer(win, &view, &col, row, style);
+    }
+
+    item.data.width = @intCast(lwidth);
+}
+
+/// Draws the appropriate row's icon depending on whether
+/// the row is being edited or pinned.
+fn drawIcon(self: NotesList, col: *u16, args: LineArgs) void {
+    const win = self.list.win orelse return;
+
+    var view = self.list.scroll_view.view;
+    var note_icon = Icon.getNerd(.note);
+    var icon_style: vx.Style = .{
+        .fg = theme.Color.List.note_fg,
+        .dim = args.style.dim,
+    };
+
+    if (args.item.data.is_pinned) {
+        note_icon = Icon.getNerd(.pin);
+        icon_style.fg = theme.Color.Border.fg_focused;
+    }
+
+    if (self.selectedNote()) |note| {
+        if (note == args.item) {
+            icon_style.fg = theme.Color.default_fg;
+            icon_style.bg = theme.Color.List.selection_bg;
+
+            if (self.list.is_insert) {
                 note_icon = Icon.getNerd(.pen);
             }
         }
-
-        Cell.writeStr(win, &view, &col, row, note_icon, icon_style);
-        Cell.writeStr(win, &view, &col, row, " ", style);
-
-        // switch to input value when we're renaming
-        if (self.list.is_insert and item.data.edit_info != null) {
-            for (item.data.input_val.items) |char| {
-                win.writeCell(
-                    col,
-                    @intCast(item.data.getTermRow(view.scroll.y)),
-                    Cell.get(char.grapheme, char.width, style),
-                );
-                col += 1;
-            }
-        } else {
-            Cell.writeStr(win, &view, &col, row, item.data.getName(false), style);
-        }
-
-        w = col;
-
-        // pad the rest of the line to make the selection expand to the whole row
-        while (col < width) {
-            Cell.writeStr(win, &view, &col, row, " ", style);
-        }
     }
 
-    item.data.width = @intCast(w);
+    Cell.writeStr(win, &view, col, args.row, note_icon, icon_style);
+}
+
+/// Draws the row's name or renders an input field if in insert mode.
+fn drawName(self: NotesList, col: *u16, args: LineArgs) void {
+    const win = self.list.win orelse return;
+    var view = self.list.scroll_view.view;
+    const item = args.item;
+
+    // switch to input value when we're renaming
+    if (self.list.is_insert and item.data.edit_info != null) {
+        for (item.data.input_val.items) |char| {
+            const ins_row: u16 = @intCast(item.data.getTermRow(view.scroll.y));
+            const cell = Cell.get(char.grapheme, char.width, args.style);
+            win.writeCell(col.*, ins_row, cell);
+            col.* += 1;
+        }
+    } else {
+        Cell.writeStr(win, &view, col, args.row, item.data.getName(false), args.style);
+    }
 }
 
 pub fn restore(self: *NotesList) !void {
@@ -206,10 +235,21 @@ pub fn getNotes(self: *NotesList, path: []const u8) !void {
     self.freeNotes();
     self.list.items = .empty;
 
+    const meta = self.app.config.meta_infos;
     for (tmp_note_entries) |entry| {
         const note_item = try self.makeNoteItemFromEntry(entry);
+
+        // checked pinned state
+        if (meta.files_info.get(note_item.data.path)) |file_info| {
+            if (file_info.is_pinned) {
+                note_item.data.is_pinned = true;
+            }
+        }
+
         try self.list.items.append(self.alloc, note_item);
     }
+
+    try self.list.sortItems(&self.list.items);
 }
 
 fn allocNoteItem(self: *NotesList, item: NoteItem) !*NoteItem {
@@ -370,6 +410,13 @@ pub fn selectedNote(self: NotesList) ?*NoteItem {
 pub fn cmdSelectNote(self: *NotesList) void {
     const note = self.selectedNote() orelse return;
     self.app.editor.openBuf(note.data.path, true) catch return;
+}
+
+/// pins or unpins the selected item.
+pub fn togglePinSelected(self: *NotesList) !void {
+    const item = self.getItem(@intCast(self.list.selected_index)) orelse return;
+    const list_item: *List.Item = @ptrCast(@alignCast(item));
+    try self.list.togglePin(list_item, true);
 }
 
 /// Updates the `last_open_note` entry in the metainfos file.

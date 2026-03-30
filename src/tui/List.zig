@@ -8,6 +8,8 @@ const Cell = @import("../tui/layout/Cell.zig");
 const ScrollView = @import("../tui/layout/ScrollView.zig");
 const fs = @import("../fs.zig");
 
+alloc: std.mem.Allocator,
+
 /// The name of the DirectoryTree.
 /// We use this as the default column title.
 name: []const u8 = "",
@@ -50,24 +52,39 @@ pub const Item = struct {
     /// of a directory.
     index: usize = 0,
 
+    index_str: []const u8 = "",
+
+    /// The parent index of the directory.
+    /// Used to make expanding and collapsing a directory possible
+    parent_index: usize = 0,
+
     /// The list item's name
     name: []const u8,
 
     /// The path of the list item
     path: []const u8,
 
+    /// The total width including name, icon, toggle arrows etc.
+    width: u32 = 0,
+
     /// An array list representation of the name.
     /// Used for editing/renaming the list item.
     input_val: std.ArrayList(Cell.Character) = .empty,
 
-    /// The total width including name, icon, toggle arrows etc.
-    width: u32 = 0,
+    children: std.ArrayList(*anyopaque) = .empty,
+
+    /// Indicates the depth of a directory.
+    /// Used to determine the indentation of the tree item.
+    level: u16 = 0,
 
     /// Whether to use nerd fonts
     nerd_fonts: bool = true,
 
     /// Whether the item is pinned to the top of the list.
     is_pinned: bool = false,
+
+    /// Whether the item is pinned to the top of the list.
+    is_expanded: bool = false,
 
     /// Whether the list item is currently cut from the list.
     /// This is usually a temporary state for moving the list item to another
@@ -208,6 +225,7 @@ pub const Item = struct {
     }
 
     pub fn deinit(self: *Item, alloc: std.mem.Allocator) void {
+        alloc.free(self.index_str);
         alloc.free(self.name);
         alloc.destroy(self.cell);
         self.input_val.deinit(alloc);
@@ -218,6 +236,7 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*List {
     const self = try alloc.create(List);
 
     self.* = .{
+        .alloc = alloc,
         .name = title,
         .cell = try .init(alloc),
         .scroll_view = try .init(alloc),
@@ -264,6 +283,61 @@ pub inline fn getTopVisRow(self: List) usize {
 pub inline fn getBottomVisRow(self: List) usize {
     const win = self.win orelse return 0;
     return @min(self.getTopVisRow() + win.height, self.len());
+}
+
+/// Sorts the items by pinned state moving pinned items to the top
+pub fn sortItems(self: *List, items: *std.ArrayList(*anyopaque)) !void {
+    var cloned = try items.clone(self.alloc);
+    defer cloned.deinit(self.alloc);
+
+    items.clearAndFree(self.alloc);
+
+    var pinned: std.ArrayList(*anyopaque) = .empty;
+    defer pinned.deinit(self.alloc);
+
+    for (cloned.items) |list_item| {
+        const item: *Item = @ptrCast(@alignCast(list_item));
+        if (item.is_pinned) {
+            try pinned.append(self.alloc, item);
+        }
+    }
+
+    std.mem.sort(*anyopaque, pinned.items, .{}, lessThan);
+
+    var unpinned: std.ArrayList(*anyopaque) = .empty;
+    defer unpinned.deinit(self.alloc);
+
+    for (cloned.items) |list_item| {
+        const item: *Item = @ptrCast(@alignCast(list_item));
+        if (!item.is_pinned) {
+            try unpinned.append(self.alloc, item);
+        }
+    }
+
+    std.mem.sort(*anyopaque, unpinned.items, .{}, lessThan);
+
+    //var i: usize = 0;
+    for (pinned.items) |list_item| {
+        const item: *Item = @ptrCast(@alignCast(list_item));
+        //item.index = i;
+        //item.index_str = try std.fmt.allocPrint(self.alloc, "{}", .{i});
+        try items.append(self.alloc, item);
+        //i += 1;
+    }
+
+    for (unpinned.items) |list_item| {
+        const item: *Item = @ptrCast(@alignCast(list_item));
+        //item.index = i;
+        //item.index_str = try std.fmt.allocPrint(self.alloc, "{}", .{i});
+        try items.append(self.alloc, item);
+        //i += 1;
+    }
+}
+
+fn lessThan(_: @TypeOf(.{}), a: *anyopaque, b: *anyopaque) bool {
+    const item_a: *Item = @ptrCast(@alignCast(a));
+    const item_b: *Item = @ptrCast(@alignCast(b));
+    return std.mem.order(u8, item_a.name, item_b.name) == .lt;
 }
 
 pub inline fn getItemsSlice(self: List) []*anyopaque {
@@ -380,6 +454,35 @@ pub fn halfPageDown(self: *List) void {
         self.goToBottom();
     } else {
         self.selected_index = new_index;
+    }
+}
+
+/// pins or unpins `item` and saves the state to the meta config.
+/// If `sort` is true the pinned items will appear at the top of the list
+/// and the selection will be moved to the new position so the item will be
+/// kept being selection.
+pub fn togglePin(self: *List, item: *Item, sort: bool) !void {
+    item.is_pinned = !item.is_pinned;
+
+    if (sort) {
+        try self.sortItems(&self.items);
+    }
+
+    try self.app.config.meta_infos.updateFileInfo(
+        item.path,
+        .is_pinned,
+        item.is_pinned,
+    );
+
+    // move selection to the new position of the item.
+    var index: isize = 0;
+    for (self.items.items) |item_| {
+        const list_item_: *List.Item = @ptrCast(@alignCast(item_));
+        if (std.mem.eql(u8, list_item_.name, item.name)) {
+            self.selected_index = index;
+            break;
+        }
+        index += 1;
     }
 }
 

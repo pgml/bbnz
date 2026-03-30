@@ -120,6 +120,16 @@ pub fn get(grapheme: []const u8, width: u8, style: vx.Style) vx.Cell {
     };
 }
 
+pub fn writeSpacer(
+    win: vx.Window,
+    view: *vx.widgets.ScrollView,
+    col: *u16,
+    row: u16,
+    style: vx.Style,
+) void {
+    Cell.writeStr(win, view, col, row, " ", style);
+}
+
 pub inline fn writeStr(
     win: vx.Window,
     view: ?*vx.widgets.ScrollView,

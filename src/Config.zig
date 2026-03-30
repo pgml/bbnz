@@ -219,9 +219,9 @@ pub const MetaInfos = struct {
     }
 
     pub fn addFileInfo(self: *MetaInfos, file: anytype) !void {
-        try self.files_info.put(file.data.path, .{
+        try self.files_info.put(file.path, .{
             .is_expanded = file.is_expanded,
-            .is_pinned = file.data.is_pinned,
+            .is_pinned = file.is_pinned,
         });
 
         try self.write();
@@ -239,8 +239,11 @@ pub const MetaInfos = struct {
         const ValType = @TypeOf(val);
 
         if (ValType == bool) {
-            if (opt == .is_expanded) file.value_ptr.is_expanded = val;
-            if (opt == .is_pinned) file.value_ptr.is_pinned = val;
+            switch (opt) {
+                .is_expanded => file.value_ptr.is_expanded = val,
+                .is_pinned => file.value_ptr.is_pinned = val,
+                else => {},
+            }
         }
 
         if (is_file) {

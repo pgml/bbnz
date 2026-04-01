@@ -58,6 +58,9 @@ custom_events: std.ArrayList(Event) = .empty,
 /// Whether the main loop should be rerendered.
 redraw_ui: bool = false,
 
+/// Cache notes root directory for convenience.
+notes_root: []const u8 = "",
+
 pub const Column = enum {
     status_bar,
     directory_tree,
@@ -132,6 +135,7 @@ pub fn run(self: *App) !void {
     try self.vx.queryTerminal(self.tty.writer(), 1 * std.time.ns_per_s);
 
     self.input.app = self;
+    self.notes_root = try self.alloc.dupe(u8, try self.config.getNotesRootDir());
     try self.directory_tree.run();
     try self.restoreState();
 
@@ -414,6 +418,8 @@ pub fn deinit(self: *App) void {
 
     self.status_bar.deinit();
     self.alloc.destroy(self.status_bar);
+
+    self.alloc.free(self.notes_root);
 
     self.vx.deinit(self.alloc, self.tty.writer());
     self.tty.deinit();

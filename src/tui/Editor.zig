@@ -182,19 +182,17 @@ pub fn getRelativeBufPath(self: Editor, no_file: bool) []const u8 {
 }
 
 pub fn getRelativePath(self: Editor, path: []const u8, no_file: bool) []const u8 {
-    const notes_root = self.app.config.getNotesRootDir() catch return "";
-
-    if (!std.mem.startsWith(u8, path, notes_root)) {
+    if (!std.mem.startsWith(u8, path, self.app.notes_root)) {
         return "";
     }
 
-    var rel_path = path[notes_root.len..];
+    var rel_path = path[self.app.notes_root.len..];
 
     if (no_file) {
         if (std.fs.path.dirname(path)) |dir_name| {
-            const len = dir_name.len - notes_root.len;
+            const len = dir_name.len - self.app.notes_root.len;
             const p: []u8 = @constCast(rel_path);
-            _ = std.mem.replace(u8, dir_name, notes_root, "", p);
+            _ = std.mem.replace(u8, dir_name, self.app.notes_root, "", p);
             return rel_path[0..len];
         }
     }

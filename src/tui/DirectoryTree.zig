@@ -41,7 +41,7 @@ pub const TreeItem = struct {
     indent_level: u16 = 0,
 
     pub inline fn hasChildren(self: TreeItem) bool {
-        return self.children.items.len > 0;
+        return self.data.children.items.len > 0;
     }
 
     /// Attempts sets the expand state to true.
@@ -142,8 +142,6 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) !void {
             style.bg = theme.Color.List.selection_bg;
         }
 
-        dir.data.index = term_row;
-
         self.drawLine(dir, @intCast(term_row), style);
         i += 1;
     }
@@ -160,6 +158,15 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) !void {
         }
     }
     //}
+}
+
+fn setRowIndices(self: *DirectoryTree) void {
+    var i: usize = 0;
+    for (self.list.items.items) |item| {
+        const dir: *TreeItem = @ptrCast(@alignCast(item));
+        dir.data.index = i;
+        i += 1;
+    }
 }
 
 const LineArgs = struct {
@@ -288,6 +295,15 @@ fn drawName(self: DirectoryTree, col: *u16, args: LineArgs) void {
     }
 }
 
+/// Refreshes the entire directory tree.
+/// Invalidates all pointers and rebuilds the tree from scratch.
+fn refresh(self: *DirectoryTree) !void {
+    self.deinitItems();
+    self.list.items.clearRetainingCapacity();
+    try self.buildTreeItems();
+    try self.restore();
+}
+
 pub fn restore(self: *DirectoryTree) !void {
     const meta = self.app.config.meta_infos;
 
@@ -305,7 +321,8 @@ pub fn restore(self: *DirectoryTree) !void {
     }
 
     self.setRowByPath(meta.last_directory);
-    //try self.list.sortItems(&self.list.items);
+    try self.list.sortItems(&self.list.items);
+    self.setRowIndices();
     try self.expandItemsFromConfig();
 }
 
@@ -313,8 +330,10 @@ pub fn restore(self: *DirectoryTree) !void {
 fn buildTreeItems(self: *DirectoryTree) !void {
     var arena = std.heap.ArenaAllocator.init(self.alloc);
     defer arena.deinit();
-    const notes_root = try self.app.config.getNotesRootDir();
-    const tmp_dir_entries = try fs.Directories.list(arena.allocator(), notes_root);
+    const tmp_dir_entries = try fs.Directories.list(
+        arena.allocator(),
+        self.app.notes_root,
+    );
 
     for (tmp_dir_entries) |entry| {
         const dir_item = try self.makeTreeItemFromEntry(entry, 0, 0);
@@ -354,12 +373,16 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
         try item.data.children.append(self.alloc, tree_item);
     }
 
-    //try self.list.sortItems(&item.data.children);
+    try self.list.sortItems(&item.data.children);
+    self.setRowIndices();
 
-    var i: usize = 0;
-    for (item.data.children.items) |child_item| {
+    var i = item.data.children.items.len;
+    while (i > 0) {
+        i -= 1;
+        const child_item = item.data.children.items[i];
         const tree_item: *TreeItem = @ptrCast(@alignCast(child_item));
-        const insert_index = index + 1 + i;
+        const insert_index = index + 1;
+
         try self.list.items.insert(self.alloc, insert_index, tree_item);
 
         // recusively check children for expanded state
@@ -369,8 +392,9 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
             }
             try self.expandTreeItem(insert_index);
         }
-        i += 1;
     }
+
+    self.setRowIndices();
 }
 
 fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
@@ -396,6 +420,8 @@ fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
     }
 
     _ = item.collapse(self.alloc);
+
+    self.setRowIndices();
 }
 
 /// allocates the given TreeItem.
@@ -433,7 +459,7 @@ fn makeTreeItem(self: *DirectoryTree, parent_item: ?*TreeItem) !*TreeItem {
     var level: u16 = 0;
     var parent_index: usize = 0;
 
-    var path = try self.alloc.dupe(u8, try self.app.config.getNotesRootDir());
+    var path = try self.alloc.dupe(u8, self.app.notes_root);
     defer self.alloc.free(path);
 
     if (parent_item) |parent| {
@@ -702,13 +728,56 @@ pub inline fn selectedDir(self: DirectoryTree) ?*TreeItem {
 }
 
 pub fn togglePin(self: *DirectoryTree) !void {
-    const item = self.list.getItem(@intCast(self.list.selected_index)) orelse return;
-    const list_item: *List.Item = @ptrCast(@alignCast(item));
-    try self.list.togglePin(list_item, false);
+    const list_item = self.list.getItem(@intCast(self.list.selected_index)) orelse return;
+    const item: *List.Item = @ptrCast(@alignCast(list_item));
+    const path = try self.alloc.dupe(u8, item.path);
+    defer self.alloc.free(path);
 
-    const parent = self.list.getItem(list_item.parent_index) orelse return;
-    const parent_item: *List.Item = @ptrCast(@alignCast(parent));
-    try self.list.sortItems(&parent_item.children);
+    try self.list.togglePin(item, false);
+    try self.refresh();
+
+    for (self.list.items.items, 0..) |entry, i| {
+        const tree_item: *List.Item = @ptrCast(@alignCast(entry));
+        if (std.mem.eql(u8, tree_item.path, path)) {
+            self.list.selected_index = @intCast(i);
+        }
+    }
+
+    self.setRowIndices();
+}
+
+fn getItemFamily(self: DirectoryTree, index: usize) ![]*anyopaque {
+    const items = self.list.items.items;
+    const item: *TreeItem = @ptrCast(@alignCast(items[index]));
+
+    var fam: std.ArrayList(*anyopaque) = .empty;
+    try fam.append(self.alloc, item);
+
+    for (0..items.len) |i| {
+        const entry: *TreeItem = @ptrCast(@alignCast(items[i]));
+        if (i <= index) continue;
+        if (entry.data.level == item.data.level) break;
+        try fam.append(self.alloc, entry);
+    }
+
+    return try fam.toOwnedSlice(self.alloc);
+}
+
+fn getItemFamilySliced(self: DirectoryTree, index: usize) ![]usize {
+    const items = self.list.items.items;
+    const item: *TreeItem = @ptrCast(@alignCast(items[index]));
+
+    var fam: std.ArrayList(usize) = .empty;
+    try fam.append(self.alloc, index);
+
+    for (0..items.len) |i| {
+        const entry: *TreeItem = @ptrCast(@alignCast(items[i]));
+        if (i <= index) continue;
+        if (entry.data.level == item.data.level) break;
+        try fam.append(self.alloc, i);
+    }
+
+    return try fam.toOwnedSlice(self.alloc);
 }
 
 pub fn cmdExpand(self: *DirectoryTree) void {
@@ -747,13 +816,16 @@ fn updateLastDir(self: DirectoryTree) void {
     self.app.config.meta_infos.write() catch return;
 }
 
-pub fn deinit(self: *DirectoryTree) void {
+fn deinitItems(self: *DirectoryTree) void {
     for (self.list.items.items) |item| {
         const entry: *TreeItem = @ptrCast(@alignCast(item));
         entry.deinit(self.alloc);
         self.alloc.destroy(entry);
     }
+}
 
+pub fn deinit(self: *DirectoryTree) void {
+    self.deinitItems();
     self.list.deinit(self.alloc);
     self.alloc.destroy(self.list);
 }

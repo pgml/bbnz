@@ -414,9 +414,9 @@ pub fn cmdSelectNote(self: *NotesList) void {
 
 /// pins or unpins the selected item.
 pub fn togglePinSelected(self: *NotesList) !void {
-    const item = self.getItem(@intCast(self.list.selected_index)) orelse return;
-    const list_item: *List.Item = @ptrCast(@alignCast(item));
-    try self.list.togglePin(list_item, true);
+    const list_item = self.getItem(@intCast(self.list.selected_index)) orelse return;
+    const item: *List.Item = @ptrCast(@alignCast(list_item));
+    try self.list.togglePin(item, true);
 }
 
 /// Updates the `last_open_note` entry in the metainfos file.

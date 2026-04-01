@@ -286,7 +286,10 @@ pub inline fn getBottomVisRow(self: List) usize {
 }
 
 /// Sorts the items by pinned state moving pinned items to the top
-pub fn sortItems(self: *List, items: *std.ArrayList(*anyopaque)) !void {
+pub fn sortItems(
+    self: *List,
+    items: *std.ArrayList(*anyopaque),
+) !void {
     var cloned = try items.clone(self.alloc);
     defer cloned.deinit(self.alloc);
 
@@ -316,21 +319,14 @@ pub fn sortItems(self: *List, items: *std.ArrayList(*anyopaque)) !void {
 
     std.mem.sort(*anyopaque, unpinned.items, .{}, lessThan);
 
-    //var i: usize = 0;
     for (pinned.items) |list_item| {
         const item: *Item = @ptrCast(@alignCast(list_item));
-        //item.index = i;
-        //item.index_str = try std.fmt.allocPrint(self.alloc, "{}", .{i});
         try items.append(self.alloc, item);
-        //i += 1;
     }
 
     for (unpinned.items) |list_item| {
         const item: *Item = @ptrCast(@alignCast(list_item));
-        //item.index = i;
-        //item.index_str = try std.fmt.allocPrint(self.alloc, "{}", .{i});
         try items.append(self.alloc, item);
-        //i += 1;
     }
 }
 
@@ -468,11 +464,7 @@ pub fn togglePin(self: *List, item: *Item, sort: bool) !void {
         try self.sortItems(&self.items);
     }
 
-    try self.app.config.meta_infos.updateFileInfo(
-        item.path,
-        .is_pinned,
-        item.is_pinned,
-    );
+    try self.app.config.meta_infos.addFileInfo(item);
 
     // move selection to the new position of the item.
     var index: isize = 0;

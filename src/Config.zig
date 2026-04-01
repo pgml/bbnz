@@ -7,6 +7,7 @@ const microwave = @import("microwave");
 const tui = @import("tui/tui.zig");
 const TextArea = tui.Editor.TextArea;
 
+const log = @import("log.zig");
 const theme = @import("tui/layout/theme.zig");
 const utils = @import("utils.zig");
 
@@ -117,7 +118,18 @@ pub const MetaInfos = struct {
         defer self.alloc.free(read_buf);
 
         var reader = file.reader(read_buf);
-        const doc = try microwave.parseFromReader(self.alloc, &reader.interface);
+        const doc = microwave.parseFromReader(
+            self.alloc,
+            &reader.interface,
+        ) catch |err| {
+            switch (err) {
+                microwave.Parser.Error.InvalidUtf8 => {
+                    log.err("Failed to parse .metainfos file.", .{});
+                    return err;
+                },
+                else => return err,
+            }
+        };
         defer doc.deinit();
 
         var iter = doc.table.iterator();
@@ -219,7 +231,8 @@ pub const MetaInfos = struct {
     }
 
     pub fn addFileInfo(self: *MetaInfos, file: anytype) !void {
-        try self.files_info.put(file.path, .{
+        const path = try self.alloc.dupe(u8, file.path);
+        try self.files_info.put(path, .{
             .is_expanded = file.is_expanded,
             .is_pinned = file.is_pinned,
         });
@@ -235,7 +248,8 @@ pub const MetaInfos = struct {
     ) !void {
         // this is a cheap check but it's okay for now.
         const is_file = !utils.strEql(std.fs.path.extension(filepath), "");
-        const file = try self.files_info.getOrPut(filepath);
+        const path = try self.alloc.dupe(u8, filepath);
+        const file = try self.files_info.getOrPut(path);
         const ValType = @TypeOf(val);
 
         if (ValType == bool) {

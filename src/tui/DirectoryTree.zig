@@ -87,10 +87,6 @@ pub fn init(alloc: std.mem.Allocator, title: []const u8, app: *App) !*DirectoryT
     return self;
 }
 
-pub fn run(self: *DirectoryTree) !void {
-    try self.buildTreeItems();
-}
-
 pub fn update(self: *DirectoryTree, event: App.Event) !void {
     if (self.list.len() == 0) {}
 
@@ -160,6 +156,9 @@ pub fn draw(self: *DirectoryTree, win: vx.Window) !void {
     //}
 }
 
+/// Assigns the list item's indices.
+/// This should be called every time any kind of list alteration
+/// took place.
 fn setRowIndices(self: *DirectoryTree) void {
     var i: usize = 0;
     for (self.list.items.items) |item| {
@@ -300,7 +299,6 @@ fn drawName(self: DirectoryTree, col: *u16, args: LineArgs) void {
 fn refresh(self: *DirectoryTree) !void {
     self.deinitItems();
     self.list.items.clearRetainingCapacity();
-    try self.buildTreeItems();
     try self.restore();
 }
 
@@ -322,29 +320,34 @@ pub fn restore(self: *DirectoryTree) !void {
 
     self.setRowByPath(meta.last_directory);
     try self.list.sortItems(&self.list.items);
-    self.setRowIndices();
-    try self.expandItemsFromConfig();
+    try self.createExpandRootFolder();
 }
 
 /// Builds the initial directory tree from the notes root directory
-fn buildTreeItems(self: *DirectoryTree) !void {
-    var arena = std.heap.ArenaAllocator.init(self.alloc);
-    defer arena.deinit();
-    const tmp_dir_entries = try fs.Directories.list(
-        arena.allocator(),
-        self.app.notes_root,
-    );
+fn createExpandRootFolder(self: *DirectoryTree) !void {
+    const notes_root = self.app.notes_root;
+    const root_entry: fs.Directories.Entry = .{
+        .basename = App.name,
+        .path = notes_root,
+        .num_files = try fs.Directories.getChildCount(notes_root, .file),
+        .num_dirs = try fs.Directories.getChildCount(notes_root, .directory),
+    };
+    const root_dir_item = try self.makeTreeItemFromEntry(root_entry, 0, 0);
 
-    for (tmp_dir_entries) |entry| {
-        const dir_item = try self.makeTreeItemFromEntry(entry, 0, 0);
-        try self.list.items.append(self.alloc, dir_item);
-    }
+    try self.app.config.meta_infos.files_info.put(notes_root, .{
+        .is_expanded = root_dir_item.data.is_expanded,
+        .is_pinned = root_dir_item.data.is_pinned,
+    });
+
+    try self.list.items.append(self.alloc, root_dir_item);
+    try self.expandTreeItem(0);
+    self.setRowIndices();
 }
 
 /// Expands the tree item at the `index` and recusively checks for
 /// expansion state of any children.
 fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
-    if (index >= self.list.numItems() or self.app.mode == .insert) {
+    if (index > self.list.len() or self.app.mode == .insert) {
         return;
     }
 
@@ -398,7 +401,7 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
 }
 
 fn collapseTreeItem(self: *DirectoryTree, index: usize) !void {
-    if (index >= self.list.items.items.len or self.list.is_insert) {
+    if (index > self.list.len() or self.list.is_insert) {
         return;
     }
 
@@ -529,12 +532,18 @@ pub fn createListItem(self: *DirectoryTree) !void {
     try dir.data.children.append(self.alloc, list_item);
     list_item.data.index = index;
     try self.initEditListItem();
+    self.setRowIndices();
 }
 
 /// Prepares a list item for editing.
 /// Sets app into insert mode and stores the initial target cursor position
 /// for the item.
 pub fn initEditListItem(self: *DirectoryTree) !void {
+    // forbid renaming the root folder
+    if (self.list.selected_index == 0) {
+        return;
+    }
+
     const dir = self.selectedDir() orelse return;
     try dir.data.edit(
         self.alloc,
@@ -643,6 +652,8 @@ pub fn cancelEdit(self: *DirectoryTree) !void {
         self.list.items.shrinkAndFree(self.alloc, self.list.items.items.len);
         self.alloc.destroy(row);
     }
+
+    self.setRowIndices();
 }
 
 fn expandItemsFromConfig(self: *DirectoryTree) !void {

@@ -14,6 +14,8 @@ pub const Editor = tui.Editor;
 const NotesList = tui.NotesList;
 const StatusBar = tui.StatusBar;
 
+pub const name = "Bellbird Notes";
+
 alloc: std.mem.Allocator,
 
 config: *Config,
@@ -136,7 +138,6 @@ pub fn run(self: *App) !void {
 
     self.input.app = self;
     self.notes_root = try self.alloc.dupe(u8, try self.config.getNotesRootDir());
-    try self.directory_tree.run();
     try self.restoreState();
 
     const framerate: u128 = 60;

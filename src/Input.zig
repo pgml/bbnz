@@ -661,14 +661,19 @@ fn resetLeader(self: *Input) void {
         }
     }.call;
 
-    self.app.deferred_events.append(self.alloc, .{
-        .due = std.time.milliTimestamp() + def_delay,
-        .cb = .{
-            .func = resetFn,
-            .ctx = self,
-        },
-        .redraw_ui = true,
-    }) catch return;
+    if (self.app.event_queue) |*deferred| {
+        deferred.append(.{
+            .due = std.time.milliTimestamp() + def_delay,
+            .cb = .{
+                .func = resetFn,
+                .ctx = self,
+            },
+            .onAfterExecution = .{
+                .func = &App.redrawUIHook,
+                .ctx = self.app,
+            },
+        }) catch return;
+    }
 }
 
 fn lineDown(self: *Input, flags: ?Flags) void {
@@ -827,14 +832,20 @@ fn yank(self: *Input, flags: ?Flags) void {
             t.app.input.noop() catch return;
         }
     }.call;
-    self.app.deferred_events.append(self.alloc, .{
-        .due = std.time.milliTimestamp() + def_delay,
-        .cb = .{
-            .func = postYank,
-            .ctx = &self.app.editor.textarea,
-        },
-        .redraw_ui = true,
-    }) catch return;
+
+    if (self.app.event_queue) |*deferred| {
+        deferred.append(.{
+            .due = std.time.milliTimestamp() + def_delay,
+            .cb = .{
+                .func = postYank,
+                .ctx = &self.app.editor.textarea,
+            },
+            .onAfterExecution = .{
+                .func = &App.redrawUIHook,
+                .ctx = self.app,
+            },
+        }) catch return;
+    }
 }
 
 pub fn listCreate(self: *Input, flags: ?Flags) void {

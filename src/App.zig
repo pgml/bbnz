@@ -5,6 +5,7 @@ const vaxis = @import("vaxis");
 
 pub const Config = @import("Config.zig");
 pub const Input = @import("Input.zig");
+pub const deferred = @import("deferred.zig");
 const log = @import("log.zig");
 
 const tui = @import("tui/tui.zig");
@@ -51,7 +52,7 @@ loop: vaxis.Loop(Event) = undefined,
 curevent: Event = undefined,
 
 /// Special events that should asynchronously execute after a certain delay.
-deferred_events: std.ArrayList(DeferredEvent) = .empty,
+event_queue: ?deferred.Queue = null,
 
 /// Events other then the default vaxis events that are executed after the
 /// main loop unlocks.
@@ -79,15 +80,6 @@ pub const Event = union(enum) {
         col: StatusBar.ColumnPos,
         text: []const u8,
     },
-};
-
-pub const DeferredEvent = struct {
-    due: i64,
-    cb: struct {
-        func: *const fn (*anyopaque) void,
-        ctx: *anyopaque,
-    },
-    redraw_ui: bool = false,
 };
 
 pub fn init(alloc: std.mem.Allocator, args_map: std.StringHashMap(?[]const u8)) !App {
@@ -140,23 +132,14 @@ pub fn run(self: *App) !void {
     self.notes_root = try self.alloc.dupe(u8, try self.config.getNotesRootDir());
     try self.restoreState();
 
-    const framerate: u128 = 60;
-    const tick_ms: u128 = @divFloor(std.time.ms_per_s, framerate);
-    var next_frame_ms: u128 = @intCast(std.time.milliTimestamp());
+    self.event_queue = .init(self.alloc);
 
     while (!self.should_quit) {
-        const now: u128 = @intCast(std.time.milliTimestamp());
-        if (now >= next_frame_ms) {
-            // Deadline exceeded. Schedule the next frame
-            next_frame_ms = now + tick_ms;
-        } else {
-            // Sleep until the deadline
-            std.Thread.sleep(@intCast((next_frame_ms - now) * std.time.ns_per_ms));
-            next_frame_ms += tick_ms;
-        }
-
         self.redraw_ui = false;
-        try self.runScheduledEvents(@intCast(now));
+
+        if (self.event_queue) |*scheduler| {
+            try scheduler.run();
+        }
 
         {
             self.loop.queue.lock();
@@ -235,32 +218,10 @@ pub fn draw(self: *App) !void {
     }
 }
 
-/// Collects and runs all deferred events at a specific time.
-/// This should be executed in a non-blocking environment.
-fn runScheduledEvents(self: *App, now: i64) !void {
-    var schedule_events: std.ArrayListUnmanaged(DeferredEvent) = .empty;
-    defer schedule_events.deinit(self.alloc);
-
-    var i: usize = 0;
-    while (i < self.deferred_events.items.len) {
-        const event = self.deferred_events.items[i];
-
-        if (now >= event.due) {
-            try schedule_events.append(self.alloc, event);
-            _ = self.deferred_events.swapRemove(i);
-            continue;
-        }
-
-        i += 1;
-    }
-
-    for (schedule_events.items) |event| {
-        event.cb.func(event.cb.ctx);
-        if (event.redraw_ui) {
-            try self.draw();
-            self.redraw_ui = true;
-        }
-    }
+pub fn redrawUIHook(ctx: *anyopaque) void {
+    var app: *App = @ptrCast(@alignCast(ctx));
+    app.draw() catch return;
+    app.redraw_ui = true;
 }
 
 fn restoreState(self: *App) !void {
@@ -421,6 +382,10 @@ pub fn deinit(self: *App) void {
     self.alloc.destroy(self.status_bar);
 
     self.alloc.free(self.notes_root);
+
+    if (self.event_queue) |*queue| {
+        queue.deinit();
+    }
 
     self.vx.deinit(self.alloc, self.tty.writer());
     self.tty.deinit();

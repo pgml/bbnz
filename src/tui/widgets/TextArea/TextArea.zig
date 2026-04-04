@@ -140,6 +140,8 @@ pub fn update(self: *TextArea, event: Event) !void {
         return;
     }
 
+    self.use_virtual_cursor = self.app.config.@"virtual-cursor";
+
     if (self.vim.enabled) {
         try self.vim.update(event, self);
     } else {
@@ -266,7 +268,7 @@ fn isBefore(a: Buffer.CursorPos, b: Buffer.CursorPos) bool {
 }
 
 pub fn newBuf(self: *TextArea, path: []const u8) !void {
-    try self.buffers.append(self.alloc, try .init(self.alloc));
+    try self.buffers.append(self.alloc, try .init(self.alloc, self));
     var buf: *Buffer = self.buffers.getLast();
     // use the arena from the buffer since the history is tied to it.
     buf.history = try .init(buf.alloc);
@@ -278,6 +280,8 @@ pub fn newBuf(self: *TextArea, path: []const u8) !void {
 
     self.setCurBufIndex(buf.index);
     self.goToTop();
+
+    try self.app.config.meta_infos.addFileInfo(.{ .path = path, .type = .file });
 }
 
 pub fn newScratchBuf(self: *TextArea, content: ?[]const u8) !void {
@@ -374,7 +378,7 @@ pub fn closeBuf(self: *TextArea, buffer: *Buffer) !void {
 
     self.buffers.clearAndFree(self.alloc);
     self.buffers = .empty;
-    self.app.config.meta_infos.last_notes.clearRetainingCapacity();
+    self.app.config.meta_infos.@"last-notes".list.clearRetainingCapacity();
 
     const meta_infos = self.app.config.meta_infos;
 
@@ -1085,6 +1089,8 @@ pub fn setCursorCol(self: *TextArea, col: i32) void {
         row_len -= 1;
     }
     buf.col = std.math.clamp(col, 0, row_len);
+
+    self.updateCursorToConf();
 }
 
 /// Moves the cursor to the given row.
@@ -1100,6 +1106,34 @@ pub fn setCursorRow(self: *TextArea, row: i32) void {
     }
 
     buf.row = @intCast(std.math.clamp(clamped, 0, num_rows - 1));
+
+    self.updateCursorToConf();
+}
+
+fn updateCursorToConf(self: *TextArea) void {
+    if (self.app.event_queue) |*deferred| {
+        const updateFn = struct {
+            fn call(ctx: *anyopaque) void {
+                const s: *TextArea = @ptrCast(@alignCast(ctx));
+                const meta = s.app.config.meta_infos;
+                const b = s.curBuf();
+                meta.updateFileInfo(b.path, .cursor_pos, b.cursor_pos) catch return;
+            }
+        }.call;
+
+        deferred.put(.{
+            .key = "set_cursor",
+            .due = std.time.milliTimestamp() + 500,
+            .cb = .{
+                .func = updateFn,
+                .ctx = self,
+            },
+            .onAfterExecution = .{
+                .func = &App.redrawUIHook,
+                .ctx = self.app,
+            },
+        }) catch return;
+    }
 }
 
 pub fn selectRange(

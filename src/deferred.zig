@@ -2,29 +2,38 @@ const std = @import("std");
 
 const FnCtx = struct {
     func: *const fn (*anyopaque) void,
-
     ctx: *anyopaque,
 };
 
 pub const Event = struct {
+    /// Key for debouncing.
     key: ?[]const u8 = null,
 
+    /// Timestamp in ms when this event should be executed.
     due: i64,
 
+    /// Main callback.
     cb: FnCtx,
 
+    /// Optional callback after `cb`.
     onAfterExecution: ?FnCtx = null,
 };
 
 pub const Queue = struct {
     alloc: std.mem.Allocator,
 
+    /// Internal list of queued events.
     list: std.ArrayList(Event) = .empty,
 
+    /// Tick rate in Hz.
+    /// Used to calculate `tick_ms`
     framerate: u128 = 60,
 
+    /// Milliseconds per tick.
+    /// Derived from `framerate`.
     tick_ms: u128 = 0,
 
+    /// Next scheduled execution time in ms.
     next_frame_ms: u128 = 0,
 
     pub fn init(alloc: std.mem.Allocator) Queue {
@@ -42,14 +51,18 @@ pub const Queue = struct {
     /// This should be executed in a non-blocking environment.
     pub fn run(self: *Queue) !void {
         const now: u128 = @intCast(std.time.milliTimestamp());
+
         if (now >= self.next_frame_ms) {
             // Deadline exceeded. Schedule the next frame
             self.next_frame_ms = now + self.tick_ms;
         } else {
             // Sleep until the deadline
-            std.Thread.sleep(@intCast((self.next_frame_ms - now) * std.time.ns_per_ms));
+            std.Thread.sleep(
+                @intCast((self.next_frame_ms - now) * std.time.ns_per_ms),
+            );
             self.next_frame_ms += self.tick_ms;
         }
+
         var schedule_events: std.ArrayListUnmanaged(Event) = .empty;
         defer schedule_events.deinit(self.alloc);
 
@@ -108,7 +121,7 @@ pub const Queue = struct {
     }
 
     /// Returns whether an event with `key` is in the queue.
-    pub fn has(self: Queue, key: []const u8) bool {
+    pub fn contains(self: Queue, key: []const u8) bool {
         for (self.list.items) |ev| {
             if (std.mem.eql(u8, ev.key, key)) {
                 return true;

@@ -464,7 +464,11 @@ pub fn togglePin(self: *List, item: *Item, sort: bool) !void {
         try self.sortItems(&self.items);
     }
 
-    try self.app.config.meta_infos.addFileInfo(item);
+    try self.app.config.meta_infos.updateFileInfo(
+        item.path,
+        .is_pinned,
+        item.is_pinned,
+    );
 
     // move selection to the new position of the item.
     var index: isize = 0;

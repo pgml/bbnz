@@ -132,21 +132,24 @@ pub inline fn drawHeader(self: *Editor, win: vx.Window) !void {
 
 pub fn restore(self: *Editor) !void {
     const meta = self.app.config.meta_infos;
-    if (utils.strEql(meta.last_open_note, "")) {
+    if (utils.strEql(meta.@"last-directory", "")) {
         return;
     }
 
     // open all notes of the last session
-    for (meta.last_notes.items) |note| {
+    for (meta.@"last-notes".list.items) |note| {
         try self.openBuf(note, false);
         if (meta.files_info.get(note)) |file_info| {
-            const curpos = file_info.cursor_pos;
-            self.textarea.moveCursorTo(@intCast(curpos.row), @intCast(curpos.col));
+            const pos = file_info.@"cursor-pos";
+            self.textarea.moveCursorTo(
+                @intCast(pos.value.row),
+                @intCast(pos.value.col),
+            );
         }
     }
 
     // switch to the note that was opened in the editor.
-    try self.openBuf(meta.last_open_note, false);
+    try self.openBuf(meta.@"last-open-note", false);
 }
 
 /// Opens a buffer with the given `path`.

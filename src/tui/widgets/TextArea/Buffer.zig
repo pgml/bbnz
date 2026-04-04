@@ -25,6 +25,8 @@ alloc: std.mem.Allocator,
 
 index: usize = 0,
 
+parent: *TextArea,
+
 /// The cursor column index
 col: i32 = 0,
 
@@ -348,11 +350,12 @@ pub const Row = struct {
     }
 };
 
-pub fn init(alloc: std.mem.Allocator) !*Buffer {
+pub fn init(alloc: std.mem.Allocator, parent: *TextArea) !*Buffer {
     const self = try alloc.create(Buffer);
 
     self.* = .{
         .alloc = alloc,
+        .parent = parent,
         .rows = .empty,
         .history = undefined,
         .file_content = "",
@@ -378,7 +381,7 @@ pub fn setIndex(self: *Buffer, index: usize) void {
 pub fn setPaths(self: *Buffer, path: []const u8) !void {
     self.path = try self.alloc.dupe(u8, path);
 
-    const notes_root = try Config.getNotesRootDirAlloc(self.alloc);
+    const notes_root = try self.parent.app.config.getNotesRootDir();
 
     if (!std.mem.startsWith(u8, self.path, notes_root)) {
         return;
@@ -424,7 +427,11 @@ pub fn setContentFromStr(self: *Buffer, content: []const u8) !void {
 }
 
 pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
-    const file = try std.fs.openFileAbsolute(file_path, .{ .mode = .read_write });
+    const file = std.fs.openFileAbsolute(
+        file_path,
+        .{ .mode = .read_write },
+    ) catch return;
+
     defer file.close();
     const stat = try file.stat();
     const size = stat.size;

@@ -213,7 +213,7 @@ fn drawName(self: NotesList, col: *u16, args: LineArgs) void {
 
 pub fn restore(self: *NotesList) !void {
     const meta = self.app.config.meta_infos;
-    try self.getNotes(meta.last_directory);
+    try self.getNotes(meta.@"last-directory");
 }
 
 pub fn getNotes(self: *NotesList, path: []const u8) !void {
@@ -241,7 +241,7 @@ pub fn getNotes(self: *NotesList, path: []const u8) !void {
 
         // checked pinned state
         if (meta.files_info.get(note_item.data.path)) |file_info| {
-            if (file_info.is_pinned) {
+            if (file_info.@"is-pinned".value) {
                 note_item.data.is_pinned = true;
             }
         }
@@ -363,7 +363,7 @@ pub fn confirmEdit(self: *NotesList) !void {
             const conf_update = std.mem.eql(
                 u8,
                 note.data.path,
-                self.app.config.meta_infos.last_open_note,
+                self.app.config.meta_infos.@"last-open-note",
             );
 
             self.alloc.free(note.data.path);

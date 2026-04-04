@@ -311,14 +311,14 @@ pub fn restore(self: *DirectoryTree) !void {
         //dir_item.data.index = i;
         // checked pinned state
         if (meta.files_info.get(dir_item.data.path)) |file_info| {
-            if (file_info.is_pinned) {
+            if (file_info.@"is-pinned".value) {
                 dir_item.data.is_pinned = true;
             }
         }
         i += 1;
     }
 
-    self.setRowByPath(meta.last_directory);
+    self.setRowByPath(meta.@"last-directory");
     try self.list.sortItems(&self.list.items);
     try self.createExpandRootFolder();
 }
@@ -335,8 +335,8 @@ fn createExpandRootFolder(self: *DirectoryTree) !void {
     const root_dir_item = try self.makeTreeItemFromEntry(root_entry, 0, 0);
 
     try self.app.config.meta_infos.files_info.put(notes_root, .{
-        .is_expanded = root_dir_item.data.is_expanded,
-        .is_pinned = root_dir_item.data.is_pinned,
+        .@"is-expanded" = .{ .value = root_dir_item.data.is_expanded },
+        .@"is-pinned" = .{ .value = root_dir_item.data.is_pinned },
     });
 
     try self.list.items.append(self.alloc, root_dir_item);
@@ -370,7 +370,7 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
         const tree_item = try self.makeTreeItemFromEntry(entry, index, level);
 
         if (meta.files_info.get(tree_item.data.path)) |file_info| {
-            tree_item.data.is_pinned = file_info.is_pinned;
+            tree_item.data.is_pinned = file_info.@"is-pinned".value;
         }
 
         try item.data.children.append(self.alloc, tree_item);
@@ -390,7 +390,7 @@ fn expandTreeItem(self: *DirectoryTree, index: usize) !void {
 
         // recusively check children for expanded state
         if (meta.files_info.get(tree_item.data.path)) |file_info| {
-            if (!file_info.is_expanded) {
+            if (!file_info.@"is-expanded".value) {
                 continue;
             }
             try self.expandTreeItem(insert_index);
@@ -601,7 +601,7 @@ pub fn confirmEdit(self: *DirectoryTree) !void {
             const meta = self.app.config.meta_infos;
             // check for last directory equality here since it's path will
             // be freed later when we actually need to check it.
-            const conf_update = std.mem.eql(u8, dir_path, meta.last_directory);
+            const conf_update = std.mem.eql(u8, dir_path, meta.@"last-directory");
 
             // update tree item
             self.alloc.free(dir.data.path);

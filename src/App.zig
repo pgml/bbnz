@@ -230,7 +230,7 @@ fn restoreState(self: *App) !void {
     try self.notes_list.restore();
     try self.editor.restore();
     //self.focusColumn(@intCast(self.config.meta_infos.current_column));
-    self.focusColumn(@enumFromInt(self.config.meta_infos.current_column));
+    self.focusColumn(@enumFromInt(self.config.meta_infos.@"current-column"));
 }
 
 /// prepares all components for rendering, sets dimensions and offsets...
@@ -324,7 +324,7 @@ pub fn cmdPrevCol(self: *App) void {
 }
 
 fn saveColToConf(self: *App) !void {
-    self.config.meta_infos.current_column = @intFromEnum(self.current_column);
+    self.config.meta_infos.@"current-column" = @intFromEnum(self.current_column);
     try self.config.meta_infos.setValue(
         .current_column,
         self.current_column,
@@ -395,6 +395,7 @@ fn resolveArgs(self: *App, args_map: std.StringHashMap(?[]const u8)) void {
     if (args_map.getEntry("no-alt")) |_| {
         self.config.@"no-alt" = true;
     }
+
     if (args_map.getEntry("virtual-cursor")) |_| {
         self.config.@"virtual-cursor" = true;
     }

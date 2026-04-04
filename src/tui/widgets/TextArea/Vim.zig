@@ -188,11 +188,6 @@ pub fn update(self: *Vim, event: TextArea.Event, textarea: *TextArea) !void {
                 self.cp = scp;
             }
 
-            //self.dispatchCmds();
-            //if (self.mode == .normal) {
-            //    self.resetSeq();
-            //}
-
             if (self.mode == .insert) {
                 if (self.key.text) |text| {
                     self.textarea.insertSliceAtCursor(text) catch return;

@@ -1,3 +1,4 @@
+// @todo, undo and redoing patches fills memory
 const History = @This();
 const std = @import("std");
 
@@ -11,7 +12,6 @@ const HistoryError = error{
     NoUndoEntry,
 };
 
-// @todo, undo and redoing patches fills memory
 alloc: std.mem.Allocator,
 
 // EntryIndex is the current index in the history

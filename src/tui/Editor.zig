@@ -163,8 +163,6 @@ pub fn openBuf(self: *Editor, path: []const u8, save_to_conf: bool) !void {
         view.reposition();
     }
 
-    try self.setBreadCrumb(self.textarea.curBuf());
-
     const note_path = self.textarea.curBuf().path;
     if (save_to_conf) {
         try self.app.config.meta_infos.setValue(.last_open_note, note_path);
@@ -217,11 +215,6 @@ pub fn buildBreadCrumb(self: Editor, out: []u8, buffer: ?*Buffer) ![]const u8 {
 
     const buf: *Buffer = buffer orelse self.textarea.curBuf();
     const rel_path = self.getRelativeBufPath(true);
-
-    if (rel_path.len == 0) {
-        return "";
-    }
-
     const separator = " › ";
 
     var tmp_buf: [256]u8 = undefined;

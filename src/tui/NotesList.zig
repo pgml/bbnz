@@ -36,6 +36,10 @@ pub const NoteItem = struct {
     /// General list data
     data: List.Item,
 
+    pub fn delete(self: NoteItem) bool {
+        return fs.Notes.delete(self.data.path);
+    }
+
     pub fn deinit(self: *NoteItem, alloc: std.mem.Allocator) void {
         alloc.free(self.data.path);
         self.data.deinit(alloc);
@@ -417,6 +421,21 @@ pub fn togglePinSelected(self: *NotesList) !void {
     const list_item = self.getItem(@intCast(self.list.selected_index)) orelse return;
     const item: *List.Item = @ptrCast(@alignCast(list_item));
     try self.list.togglePin(item, true);
+}
+
+/// Deletes the selected note and refreshes the list.
+/// Unless the last note is deleted the selection is preserved.
+/// Otherwise the selection will be moved to the last note.
+pub fn deleteSelectedItem(self: *NotesList) void {
+    const note = self.selectedNote() orelse return;
+    if (!note.delete()) {
+        return;
+    }
+
+    self.restore() catch return;
+    if (self.list.selected_index > self.list.numItems()) {
+        self.list.selected_index = @intCast(self.list.numItems());
+    }
 }
 
 /// Updates the `last_open_note` entry in the metainfos file.

@@ -191,9 +191,13 @@ pub fn setPaths(self: *Buffer, path: []const u8) !void {
 
     if (std.fs.path.dirname(path)) |dir_name| {
         const len = dir_name.len - notes_root.len;
-        const p: []u8 = @constCast(self.rel_path);
-        _ = std.mem.replace(u8, dir_name, notes_root, "", p);
-        self.rel_path = self.rel_path[1..len];
+        if (len == 0) {
+            self.rel_path = self.path;
+        } else {
+            const p: []u8 = @constCast(self.rel_path);
+            _ = std.mem.replace(u8, dir_name, notes_root, "", p);
+            self.rel_path = self.rel_path[1..len];
+        }
     }
 }
 
@@ -245,6 +249,7 @@ pub fn setContentFromFile(self: *Buffer, file_path: []const u8) !void {
     self.file_content = try self.alloc.alloc(u8, size);
     self.current_patch = try self.alloc.alloc(u8, size);
     self.prev_value = try self.alloc.alloc(u8, size);
+
     var reader = file.reader(self.file_content);
     var i: usize = 0;
 

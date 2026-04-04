@@ -2,6 +2,7 @@ const std = @import("std");
 const Walker = std.fs.Dir.Walker;
 
 const Config = @import("Config.zig");
+const log = @import("log.zig");
 
 pub const Directories = struct {
     pub const Entry = struct {
@@ -174,6 +175,14 @@ pub const Notes = struct {
             return new_path;
         }
         return null;
+    }
+
+    pub fn delete(path: []const u8) bool {
+        std.fs.deleteFileAbsolute(path) catch |err| {
+            log.err("{}", .{err});
+            return false;
+        };
+        return true;
     }
 
     fn makePath(

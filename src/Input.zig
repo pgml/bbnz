@@ -97,6 +97,7 @@ const fn_registry = [_]FnMap{
     .{ .name = "listitem.cursorLeft",    .exec = .{ .input = listCursorLeft }},
     .{ .name = "listitem.cursorRight",   .exec = .{ .input = listCursorRight }} ,
     .{ .name = "listitem.delChar",       .exec = .{ .input = listDeleteChar }},
+    .{ .name = "listitem.delete",        .exec = .{ .input = listDeleteItem }},
     .{ .name = "listitem.cancelEdit",    .exec = .{ .input = listCancelEdit }},
     .{ .name = "listitem.confirmEdit",   .exec = .{ .input = listConfirmEdit }},
     .{ .name = "listitem.halfPageDown",  .exec = .{ .input = listHalfPageDown }},
@@ -907,6 +908,16 @@ pub fn listDeleteChar(self: *Input, flags: ?Flags) void {
     _ = flags;
     if (self.getListItem()) |item| {
         item.item.deleteBefore(item.alloc);
+    }
+}
+
+pub fn listDeleteItem(self: *Input, flags: ?Flags) void {
+    _ = flags;
+
+    switch (self.app.current_column) {
+        //.directory_tree => self.app.directory_tree.deleteSelectedItem() catch return,
+        .notes_list => self.app.notes_list.deleteSelectedItem(),
+        else => {},
     }
 }
 

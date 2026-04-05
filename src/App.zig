@@ -137,8 +137,8 @@ pub fn run(self: *App) !void {
     while (!self.should_quit) {
         self.redraw_ui = false;
 
-        if (self.event_queue) |*scheduler| {
-            try scheduler.run();
+        if (self.event_queue) |*queue| {
+            try queue.run();
         }
 
         {

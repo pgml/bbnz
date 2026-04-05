@@ -88,7 +88,9 @@ pub const Queue = struct {
     }
 
     /// Extends the queue by 1 event.
-    pub fn append(self: *Queue, ev: Event) !void {
+    pub fn append(self: *Queue, event: Event) !void {
+        var ev = event;
+        ev.due += std.time.milliTimestamp();
         try self.list.append(self.alloc, ev);
     }
 
@@ -102,7 +104,9 @@ pub const Queue = struct {
             const event_key = event.key orelse continue;
 
             if (std.mem.eql(u8, existing_key, event_key)) {
-                existing.* = event;
+                var ev = event;
+                ev.due += std.time.milliTimestamp();
+                existing.* = ev;
                 return;
             }
         }

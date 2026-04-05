@@ -1111,7 +1111,7 @@ pub fn setCursorRow(self: *TextArea, row: i32) void {
 }
 
 fn updateCursorToConf(self: *TextArea) void {
-    if (self.app.event_queue) |*deferred| {
+    if (self.app.event_queue) |*queue| {
         const updateFn = struct {
             fn call(ctx: *anyopaque) void {
                 const s: *TextArea = @ptrCast(@alignCast(ctx));
@@ -1121,9 +1121,9 @@ fn updateCursorToConf(self: *TextArea) void {
             }
         }.call;
 
-        deferred.put(.{
+        queue.put(.{
             .key = "set_cursor",
-            .due = std.time.milliTimestamp() + 500,
+            .due = 500,
             .cb = .{
                 .func = updateFn,
                 .ctx = self,

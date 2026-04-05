@@ -662,9 +662,9 @@ fn resetLeader(self: *Input) void {
         }
     }.call;
 
-    if (self.app.event_queue) |*deferred| {
-        deferred.append(.{
-            .due = std.time.milliTimestamp() + def_delay,
+    if (self.app.event_queue) |*queue| {
+        queue.append(.{
+            .due = def_delay,
             .cb = .{
                 .func = resetFn,
                 .ctx = self,
@@ -834,9 +834,9 @@ fn yank(self: *Input, flags: ?Flags) void {
         }
     }.call;
 
-    if (self.app.event_queue) |*deferred| {
-        deferred.append(.{
-            .due = std.time.milliTimestamp() + def_delay,
+    if (self.app.event_queue) |*queue| {
+        queue.append(.{
+            .due = def_delay,
             .cb = .{
                 .func = postYank,
                 .ctx = &self.app.editor.textarea,
